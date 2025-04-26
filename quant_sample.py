@@ -27,6 +27,8 @@ import numpy as np
 from quant.layer_recon import layer_reconstruction
 from quant.block_recon import block_reconstruction
 
+from hook import hook_temporal_reuse
+from hook import hook_cfg_reuse
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +39,9 @@ def main(args):
     ### Save in the same directory
     # outpath = os.path.join(args.outdir, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
     outpath = os.path.join(args.outdir, "test")
-    
-    os.makedirs(outpath)
+    if not os.path.exists(outpath):
+        os.makedirs(outpath)
+        
     log_path = os.path.join(outpath, "run.log")
     logging.basicConfig(
         format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
@@ -191,6 +194,37 @@ def main(args):
             logger.info('Calibrated model saved to {}'.format(os.path.join(outpath, "ckpt.pth")))
         qnn.set_quant_state(True, True)
 
+    ##############################################
+    ###  Add hooks for difference computing    ###
+    ###  (Jerry Wang @ 2025.04.26)             ###
+    ##############################################
+
+    def register_hook_temporal(module):
+        if isinstance(module, QuantModule):
+            hook_handle = module.register_forward_hook(hook_temporal_reuse)
+        for child in module.children():
+            register_hook_temporal(child)
+
+    def register_hook_cfg(module):
+        if isinstance(module, QuantModule):
+            hook_handle = module.register_forward_hook(hook_cfg_reuse)
+        for child in module.children():
+            register_hook_cfg(child)
+
+    # This will hook all quantized layers
+    if args.temp_reuse:
+        register_hook_temporal(qnn.model)
+    if args.cfg_reuse:
+        register_hook_cfg(qnn.model)
+
+    ### Hook certain layers, back-up
+    # for i in range(28):
+    #     qnn.model.blocks[i].mlp.fc1.register_forward_hook(hook_cfg_reuse)
+    #     qnn.model.blocks[i].mlp.fc2.register_forward_hook(hook_cfg_reuse)
+
+    print(qnn.model)
+    ##############################################
+
     if args.inference:
         # Labels to condition the model with (feel free to change):
         all_labels = np.arange(1000)
@@ -265,5 +299,9 @@ if __name__ == "__main__":
     parser.add_argument("--n_c", type=int, default=10, help="number of samples for each class for inference")
     parser.add_argument("--c_begin", type=int, default=0, help="begining class index for inference")
     parser.add_argument("--c_end", type=int, default=999, help="ending class index for inference")
+    ############## new ###############
+    parser.add_argument("--temp_reuse", action="store_true", help="use temporal reuse")
+    parser.add_argument("--cfg_reuse", action="store_true", help="use cfg reuse")
+    ##################################
     args = parser.parse_args()
     main(args)
