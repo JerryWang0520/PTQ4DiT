@@ -33,7 +33,11 @@ logger = logging.getLogger(__name__)
 def main(args):
     # Setup save path:
     os.makedirs(args.outdir, exist_ok=True)
-    outpath = os.path.join(args.outdir, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
+
+    ### Save in the same directory
+    # outpath = os.path.join(args.outdir, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
+    outpath = os.path.join(args.outdir, "test")
+    
     os.makedirs(outpath)
     log_path = os.path.join(outpath, "run.log")
     logging.basicConfig(
