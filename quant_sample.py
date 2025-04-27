@@ -27,6 +27,7 @@ import numpy as np
 from quant.layer_recon import layer_reconstruction
 from quant.block_recon import block_reconstruction
 
+from functools import partial
 from hook import hook_temporal_reuse
 from hook import hook_cfg_reuse
 
@@ -195,21 +196,18 @@ def main(args):
         qnn.set_quant_state(True, True)
 
     ##############################################
-    ###  Add hooks for difference computing    ###
-    ###  (Jerry Wang @ 2025.04.26)             ###
+    ###  Hooks for difference computing        ###
     ##############################################
 
-    def register_hook_temporal(module):
-        if isinstance(module, QuantModule):
-            hook_handle = module.register_forward_hook(hook_temporal_reuse)
-        for child in module.children():
-            register_hook_temporal(child)
+    def register_hook_temporal(model):
+        for name, module in model.named_modules():
+            if isinstance(module, QuantModule):
+                module.register_forward_hook(partial(hook_temporal_reuse, name=name))
 
-    def register_hook_cfg(module):
-        if isinstance(module, QuantModule):
-            hook_handle = module.register_forward_hook(hook_cfg_reuse)
-        for child in module.children():
-            register_hook_cfg(child)
+    def register_hook_cfg(model):
+        for name, module in model.named_modules():
+            if isinstance(module, QuantModule):
+                module.register_forward_hook(partial(hook_cfg_reuse, name=name))
 
     # This will hook all quantized layers
     if args.temp_reuse:
@@ -218,9 +216,14 @@ def main(args):
         register_hook_cfg(qnn.model)
 
     ### Hook certain layers, back-up
-    # for i in range(28):
-    #     qnn.model.blocks[i].mlp.fc1.register_forward_hook(hook_cfg_reuse)
-    #     qnn.model.blocks[i].mlp.fc2.register_forward_hook(hook_cfg_reuse)
+    # if args.temp_reuse:
+    #     for i in range(28):
+    #         qnn.model.blocks[i].mlp.fc1.register_forward_hook(hook_temporal_reuse)
+    #         qnn.model.blocks[i].mlp.fc2.register_forward_hook(hook_temporal_reuse)
+    # if args.cfg_reuse:
+    #     for i in range(28):
+    #         qnn.model.blocks[i].mlp.fc1.register_forward_hook(hook_cfg_reuse)
+    #         qnn.model.blocks[i].mlp.fc2.register_forward_hook(hook_cfg_reuse)
 
     print(qnn.model)
     ##############################################

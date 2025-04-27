@@ -1,5 +1,7 @@
 *.pt
 *.pth
 __pycache__/
-output/
 *.log
+cali*
+output
+pretrained_models

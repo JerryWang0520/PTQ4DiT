@@ -4,48 +4,48 @@ run_original:
 		--model DiT-XL/2 \
 		--image-size 256 \
 		--ckpt pretrained_models/DiT-XL-2-256x256.pt \
-		--num-sampling-steps 250 \
+		--num-sampling-steps 50 \
 		--weight_bit 8 \
 		--act_bit 8 \
 		--cali_st 25 \
 		--cali_n 64 \
 		--cali_batch_size 32 \
 		--sm_abit 8 \
-		--cali_data_path calib_2/imagenet_DiT-256_sample4000_50steps_allst.pt \
+		--cali_data_path calib/imagenet_DiT-256_sample4000_50steps_allst.pt \
 		--outdir output/ \
 		--cfg-scale 1.5 \
 		--seed 1 \
 		--resume \
-		--cali_ckpt ./cali_ckpt_2/256_88_50/ckpt.pth \
+		--cali_ckpt ./cali_ckpt/256_88_50/ckpt.pth \
 		--ptq \
 		--inference \
 		--n_c 1 \
-		--c_begin 205 \
-		--c_end 205
+		--c_begin 0 \
+		--c_end 0
 
 run_temp:
 	python quant_sample.py \
 		--model DiT-XL/2 \
 		--image-size 256 \
 		--ckpt pretrained_models/DiT-XL-2-256x256.pt \
-		--num-sampling-steps 250 \
+		--num-sampling-steps 50 \
 		--weight_bit 8 \
 		--act_bit 8 \
 		--cali_st 25 \
 		--cali_n 64 \
 		--cali_batch_size 32 \
 		--sm_abit 8 \
-		--cali_data_path calib_2/imagenet_DiT-256_sample4000_50steps_allst.pt \
+		--cali_data_path calib/imagenet_DiT-256_sample4000_50steps_allst.pt \
 		--outdir output/ \
 		--cfg-scale 1.5 \
 		--seed 1 \
 		--resume \
-		--cali_ckpt ./cali_ckpt_2/256_88_50/ckpt.pth \
+		--cali_ckpt ./cali_ckpt/256_88_50/ckpt.pth \
 		--ptq \
 		--inference \
 		--n_c 1 \
-		--c_begin 205 \
-		--c_end 205 \
+		--c_begin 0 \
+		--c_end 0 \
 		--temp_reuse
 
 run_cfg:
@@ -53,22 +53,22 @@ run_cfg:
 		--model DiT-XL/2 \
 		--image-size 256 \
 		--ckpt pretrained_models/DiT-XL-2-256x256.pt \
-		--num-sampling-steps 250 \
+		--num-sampling-steps 50 \
 		--weight_bit 8 \
 		--act_bit 8 \
 		--cali_st 25 \
 		--cali_n 64 \
 		--cali_batch_size 32 \
 		--sm_abit 8 \
-		--cali_data_path calib_2/imagenet_DiT-256_sample4000_50steps_allst.pt \
+		--cali_data_path calib/imagenet_DiT-256_sample4000_50steps_allst.pt \
 		--outdir output/ \
 		--cfg-scale 1.5 \
 		--seed 1 \
 		--resume \
-		--cali_ckpt ./cali_ckpt_2/256_88_50/ckpt.pth \
+		--cali_ckpt ./cali_ckpt/256_88_50/ckpt.pth \
 		--ptq \
 		--inference \
 		--n_c 1 \
-		--c_begin 205 \
-		--c_end 205 \
+		--c_begin 0 \
+		--c_end 0 \
 		--cfg_reuse
