@@ -27,6 +27,7 @@ import numpy as np
 from quant.layer_recon import layer_reconstruction
 from quant.block_recon import block_reconstruction
 
+from hook import hook_spatial_reuse
 from hook import hook_temporal_reuse
 from hook import hook_cfg_reuse
 
@@ -199,6 +200,12 @@ def main(args):
     ###  (Jerry Wang @ 2025.04.26)             ###
     ##############################################
 
+    def register_hook_spatial(module):
+        if isinstance(module, QuantModule):
+            hook_handle = module.register_forward_hook(hook_spatial_reuse)
+        for child in module.children():
+            register_hook_spatial(child)
+    
     def register_hook_temporal(module):
         if isinstance(module, QuantModule):
             hook_handle = module.register_forward_hook(hook_temporal_reuse)
@@ -212,6 +219,8 @@ def main(args):
             register_hook_cfg(child)
 
     # This will hook all quantized layers
+    if args.spat_reuse:
+        register_hook_spatial(qnn.model)
     if args.temp_reuse:
         register_hook_temporal(qnn.model)
     if args.cfg_reuse:
@@ -300,6 +309,7 @@ if __name__ == "__main__":
     parser.add_argument("--c_begin", type=int, default=0, help="begining class index for inference")
     parser.add_argument("--c_end", type=int, default=999, help="ending class index for inference")
     ############## new ###############
+    parser.add_argument("--spat_reuse", action="store_true", help="use spatial reuse")
     parser.add_argument("--temp_reuse", action="store_true", help="use temporal reuse")
     parser.add_argument("--cfg_reuse", action="store_true", help="use cfg reuse")
     ##################################
