@@ -28,8 +28,11 @@ from quant.layer_recon import layer_reconstruction
 from quant.block_recon import block_reconstruction
 
 from functools import partial
-from hook import hook_temporal_reuse
-from hook import hook_cfg_reuse
+from hook import hook_original
+from hook import hook_SD
+from hook import hook_TD
+from hook import hook_CUD
+from hook import hook_quant_info
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +41,8 @@ def main(args):
     os.makedirs(args.outdir, exist_ok=True)
 
     ### Save in the same directory
-    # outpath = os.path.join(args.outdir, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
-    outpath = os.path.join(args.outdir, "test")
+    outpath = os.path.join(args.outdir, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
+    # outpath = os.path.join(args.outdir, "test")
     if not os.path.exists(outpath):
         os.makedirs(outpath)
         
@@ -199,31 +202,66 @@ def main(args):
     ###  Hooks for difference computing        ###
     ##############################################
 
+    def register_hook_original(model):
+        for name, module in model.named_modules():
+            if isinstance(module, QuantModule):
+                module.register_forward_hook(partial(hook_original, name=name))
+
+    def register_hook_spatial(model):
+        for name, module in model.named_modules():
+            if isinstance(module, QuantModule):
+                module.register_forward_hook(partial(hook_SD, name=name))
+
     def register_hook_temporal(model):
         for name, module in model.named_modules():
             if isinstance(module, QuantModule):
-                module.register_forward_hook(partial(hook_temporal_reuse, name=name))
+                module.register_forward_hook(partial(hook_TD, name=name))
 
     def register_hook_cfg(model):
         for name, module in model.named_modules():
             if isinstance(module, QuantModule):
-                module.register_forward_hook(partial(hook_cfg_reuse, name=name))
+                module.register_forward_hook(partial(hook_CUD, name=name))
+
+    def register_hook_quant(model, output_dir="output"):
+        for name, module in model.named_modules():
+            if isinstance(module, QuantModule):
+                module.register_forward_hook(partial(hook_quant_info, name=name, output_dir=os.path.join(output_dir, "quant_info")))
 
     # This will hook all quantized layers
-    if args.temp_reuse:
+    if args.original:
+        register_hook_original(qnn.model)
+    if args.SD:
+        register_hook_spatial(qnn.model)
+    if args.TD:
         register_hook_temporal(qnn.model)
-    if args.cfg_reuse:
+    if args.CUD:
         register_hook_cfg(qnn.model)
+    # if args.quant_info:
+    #     register_hook_quant(qnn.model, outpath)
 
     ### Hook certain layers, back-up
-    # if args.temp_reuse:
+    # if args.original:
+    #     qnn.model.x_embedder.proj.register_forward_hook(partial(hook_original, name=f"model.x_embedder.proj"))
+        # qnn.model.blocks[0].adaLN_modulation[1].register_forward_hook(partial(hook_original, name=f"model.blocks[0].adaLN_modulation.1"))
+        # for i in range(28):
+        #     qnn.model.blocks[i].mlp.fc1.register_forward_hook(partial(hook_original, name=f"model.blocks.{i}.mlp.fc1"))
+        #     qnn.model.blocks[i].mlp.fc2.register_forward_hook(partial(hook_original, name=f"model.blocks.{i}.mlp.fc2"))
+    # if args.SD:
+    #     for i in range(1):
+    #         qnn.model.blocks[i].mlp.fc1.register_forward_hook(partial(hook_SD, name=f"model.blocks.{i}.mlp.fc1"))
+    #         qnn.model.blocks[i].mlp.fc2.register_forward_hook(partial(hook_SD, name=f"model.blocks.{i}.mlp.fc2"))
+    # if args.TD:
     #     for i in range(28):
-    #         qnn.model.blocks[i].mlp.fc1.register_forward_hook(hook_temporal_reuse)
-    #         qnn.model.blocks[i].mlp.fc2.register_forward_hook(hook_temporal_reuse)
-    # if args.cfg_reuse:
+    #         qnn.model.blocks[i].mlp.fc1.register_forward_hook(partial(hook_TD, name=f"model.blocks.{i}.mlp.fc1"))
+    #         qnn.model.blocks[i].mlp.fc2.register_forward_hook(partial(hook_TD, name=f"model.blocks.{i}.mlp.fc2"))
+    # if args.CUD:
     #     for i in range(28):
-    #         qnn.model.blocks[i].mlp.fc1.register_forward_hook(hook_cfg_reuse)
-    #         qnn.model.blocks[i].mlp.fc2.register_forward_hook(hook_cfg_reuse)
+    #         qnn.model.blocks[i].mlp.fc1.register_forward_hook(partial(hook_CUD, name=f"model.blocks.{i}.mlp.fc1"))
+    #         qnn.model.blocks[i].mlp.fc2.register_forward_hook(partial(hook_CUD, name=f"model.blocks.{i}.mlp.fc2"))
+    # if args.quant_info:
+    #     for i in range(28):
+    #         qnn.model.blocks[i].mlp.fc1.register_forward_hook(partial(hook_quant_info, name=f"model.blocks.{i}.mlp.fc1", output_dir=os.path.join(outpath, "quant_info")))
+    #         qnn.model.blocks[i].mlp.fc2.register_forward_hook(partial(hook_quant_info, name=f"model.blocks.{i}.mlp.fc2", output_dir=os.path.join(outpath, "quant_info")))
 
     print(qnn.model)
     ##############################################
@@ -303,8 +341,11 @@ if __name__ == "__main__":
     parser.add_argument("--c_begin", type=int, default=0, help="begining class index for inference")
     parser.add_argument("--c_end", type=int, default=999, help="ending class index for inference")
     ############## new ###############
-    parser.add_argument("--temp_reuse", action="store_true", help="use temporal reuse")
-    parser.add_argument("--cfg_reuse", action="store_true", help="use cfg reuse")
+    parser.add_argument("--original", action="store_true", help="use direct computing")
+    parser.add_argument("--SD", action="store_true", help="use spatial differential computing")
+    parser.add_argument("--TD", action="store_true", help="use temporal differential computing")
+    parser.add_argument("--CUD", action="store_true", help="use conditional & unconditional differential computing")
+    parser.add_argument("--quant_info", action="store_true", help="analyze quantization paramaters")
     ##################################
     args = parser.parse_args()
     main(args)
