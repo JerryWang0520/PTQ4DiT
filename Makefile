@@ -4,7 +4,7 @@ run_original:
 		--model DiT-XL/2 \
 		--image-size 256 \
 		--ckpt pretrained_models/DiT-XL-2-256x256.pt \
-		--num-sampling-steps 250 \
+		--num-sampling-steps 50 \
 		--weight_bit 8 \
 		--act_bit 8 \
 		--cali_st 25 \
@@ -28,7 +28,7 @@ run_spat:
 		--model DiT-XL/2 \
 		--image-size 256 \
 		--ckpt pretrained_models/DiT-XL-2-256x256.pt \
-		--num-sampling-steps 250 \
+		--num-sampling-steps 50 \
 		--weight_bit 8 \
 		--act_bit 8 \
 		--cali_st 25 \
@@ -46,7 +46,7 @@ run_spat:
 		--n_c 1 \
 		--c_begin 205 \
 		--c_end 205 \
-		--spat_reuse
+		--reuse_type=spatial
 
 
 run_temp:
@@ -54,7 +54,7 @@ run_temp:
 		--model DiT-XL/2 \
 		--image-size 256 \
 		--ckpt pretrained_models/DiT-XL-2-256x256.pt \
-		--num-sampling-steps 250 \
+		--num-sampling-steps 50 \
 		--weight_bit 8 \
 		--act_bit 8 \
 		--cali_st 25 \
@@ -72,14 +72,14 @@ run_temp:
 		--n_c 1 \
 		--c_begin 205 \
 		--c_end 205 \
-		--temp_reuse
+		--reuse_type=temporal
 
 run_cfg:
 	python quant_sample.py \
 		--model DiT-XL/2 \
 		--image-size 256 \
 		--ckpt pretrained_models/DiT-XL-2-256x256.pt \
-		--num-sampling-steps 250 \
+		--num-sampling-steps 50 \
 		--weight_bit 8 \
 		--act_bit 8 \
 		--cali_st 25 \
@@ -97,4 +97,4 @@ run_cfg:
 		--n_c 1 \
 		--c_begin 205 \
 		--c_end 205 \
-		--cfg_reuse
+		--reuse_type=cfg
