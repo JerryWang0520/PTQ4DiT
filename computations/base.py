@@ -8,8 +8,149 @@ class ComputationStrategy(ABC):
     def __init__(self):
         self.tensors = {}
 
-    # def _get_spatial_difference_input():
+    def fwd_func(self, module, name, input, weight):
+        if module.fwd_func == F.conv2d:
+            w_col = weight.clone()
+            w_col = w_col.view(w_col.shape[0], -1)
+            output = torch.matmul(w_col, input)
+        elif module.fwd_func == F.linear:
+            output = module.fwd_func(input, weight, **module.fwd_kwargs)
+        else:
+            raise Exception(f"Unsupported fwd_func in {name}")
+        
+        return output
+    
+    def get_Raw_input(self, module, name, tensor):
+        tensor = tensor.clone()
 
+        if module.fwd_func == F.conv2d:
+            fold_params = self._get_fold_params(module)
+            tensor = F.unfold(tensor, **fold_params)
+        elif module.fwd_func == F.linear:
+            pass
+        else:
+            raise Exception(f"Unsupported fwd_func in {name}")
+
+        return tensor
+
+    def get_Raw_output(self, module, name, tensor, shape):
+        tensor = tensor.clone()
+
+        if module.fwd_func == F.conv2d:
+            tensor = tensor.view(shape)
+        elif module.fwd_func == F.linear:
+            pass
+        else:
+            raise Exception(f"Unsupported fwd_func in {name}")
+
+        return tensor
+    
+    def get_SD_input(self, module, name, tensor, ref_first=False):
+        tensor = tensor.clone()
+
+        if module.fwd_func == F.conv2d:
+            fold_params = self._get_fold_params(module)
+            tensor = F.unfold(tensor, **fold_params)
+
+            if ref_first:
+                tensor[..., 1:] -= tensor[..., 0:1]
+            else:
+                tensor_tmp = torch.roll(tensor, 1, dims=-1)
+                tensor_tmp[..., 0:1] = 0
+                tensor -= tensor_tmp
+                del tensor_tmp
+        elif module.fwd_func == F.linear:
+            if tensor.dim() in [2, 3]:
+                if ref_first:
+                    tensor[..., 1:, :] -= tensor[..., 0:1, :]
+                else:
+                    tensor_tmp = torch.roll(tensor, 1, dims=-2)
+                    tensor_tmp[..., 0:1, :] = 0
+                    tensor -= tensor_tmp
+                    del tensor_tmp
+            else:
+                raise Exception(f"Unsupported input dimension {tensor.dim()} in {name}")
+        else:
+            raise Exception(f"Unsupported fwd_func in {name}")
+
+        return tensor
+
+    def get_SD_output(self, module, name, tensor, shape, ref_first=False):
+        tensor = tensor.clone()
+
+        if module.fwd_func == F.conv2d:
+            if ref_first:
+                tensor[..., 1:]  += tensor[..., 0:1]
+            else:
+                tensor = torch.cumsum(tensor, dim=-1)
+            tensor = tensor.view(shape)
+        elif module.fwd_func == F.linear:
+            if tensor.dim() in [2, 3]:
+                if ref_first:
+                    tensor[..., 1:, :] += tensor[..., 0:1, :]
+                else:
+                    tensor = torch.cumsum(tensor, dim=-2)
+            else:
+                raise Exception(f"Unsupported input dimension {tensor.dim()} in {name}")
+        else:
+            raise Exception(f"Unsupported fwd_func in {name}")
+        
+        return tensor
+    
+    def get_TD_input(self, module, name, tensor, tensor_prev):
+        tensor = tensor.clone()
+        tensor -= tensor_prev
+
+        if module.fwd_func == F.conv2d:
+            fold_params = self._get_fold_params(module)
+            tensor = F.unfold(tensor, **fold_params)
+        elif module.fwd_func == F.linear:
+            pass
+        else:
+            raise Exception(f"Unsupported fwd_func in {name}")
+        
+        return tensor
+    
+    def get_TD_output(self, module, name, tensor, tensor_prev, shape):
+        tensor = tensor.clone()
+
+        if module.fwd_func == F.conv2d:
+            tensor = tensor.view(shape)
+        elif module.fwd_func == F.linear:
+            pass
+        else:
+            raise Exception(f"Unsupported fwd_func in {name}")
+
+        tensor += tensor_prev        
+        return tensor
+    
+    def get_CUD_input(self, module, name, tensor, tensor_ref):
+        tensor = tensor.clone()
+        tensor -= tensor_ref
+
+        if module.fwd_func == F.conv2d:
+            fold_params = self._get_fold_params(module)
+            tensor = F.unfold(tensor, **fold_params)
+        elif module.fwd_func == F.linear:
+            pass
+        else:
+            raise Exception(f"Unsupported fwd_func in {name}")
+        
+        return tensor
+
+    def get_CUD_output(self, module, name, tensor, tensor_ref, shape):
+        tensor = tensor.clone()
+
+        if module.fwd_func == F.conv2d:
+            tensor = tensor.view(shape)
+        elif module.fwd_func == F.linear:
+            pass
+        else:
+            raise Exception(f"Unsupported fwd_func in {name}")
+
+        tensor += tensor_ref        
+        return tensor
+    
     def _get_quantization_params(self, module, input):
         x_scale = module.act_quantizer.delta
         w_scale = module.weight_quantizer.delta
