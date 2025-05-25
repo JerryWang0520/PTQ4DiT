@@ -27,10 +27,6 @@ import numpy as np
 from quant.layer_recon import layer_reconstruction
 from quant.block_recon import block_reconstruction
 
-from analyses.manager import TensorAnalysisManager
-from hooks.utils import register_hooks_with_strategy, remove_hooks
-from hooks.utils import setup_analysis_hooks    # One-line setup
-
 logger = logging.getLogger(__name__)
 
 def main(args):
@@ -198,23 +194,32 @@ def main(args):
     ##############################################
     ###  Hooks for difference computing        ###
     ##############################################
-    if args.strategy:
-        analyzer_configs = {}
-        if args.analysis == "similarity" and args.similarity_types:
-            analyzer_configs['similarity'] = {'active_analysis': args.similarity_types}
+    if args.hook:
+        from analyses.manager import TensorAnalysisManager
+        from hooks.utils import register_hooks_with_strategy, remove_hooks
 
-        analysis_manager = TensorAnalysisManager(active_analyzer=args.analysis, analyzer_configs=analyzer_configs)
-        # handles = register_hooks_with_strategy(qnn.model, args.strategy, analysis_manager)
-        # handles = register_hooks_with_strategy(qnn.model, args.strategy, analysis_manager, exclude_modules=["x_embedder.proj"])
+        if args.strategy:
+            analyzer_configs = {}
+            if args.analysis == "similarity" and args.similarity_types:
+                analyzer_configs['similarity'] = {'active_analysis': args.similarity_types}
+            analysis_manager = TensorAnalysisManager(active_analyzer=args.analysis, analyzer_configs=analyzer_configs)
 
-        exclude_modules = ["t_embedder.mlp.0", "t_embedder.mlp.2", "final_layer.adaLN_modulation.1"]
-        # exclude_modules = ["x_embedder.proj", "t_embedder.mlp.0", "t_embedder.mlp.2", "final_layer.adaLN_modulation.1"]
-        for i in range(28):
-            exclude_modules.append(f"blocks.{i}.adaLN_modulation.1")
-        print("exclude_modules:", exclude_modules)
-        handles = register_hooks_with_strategy(qnn.model, args.strategy, analysis_manager, exclude_modules=exclude_modules)
+            # handles = register_hooks_with_strategy(qnn.model, args.strategy, analysis_manager)
+            # handles = register_hooks_with_strategy(qnn.model, args.strategy, analysis_manager, exclude_modules=["x_embedder.proj"])
 
-    # Run your inference here
+            # total 114 modules hooked
+            # include_modules = []
+            # exclude_modules = []
+            exclude_modules = ["t_embedder", "adaLN_modulation.1"]
+            print("exclude_modules:", exclude_modules)
+
+            strategy_kwargs = {}
+            if hasattr(args, "ref_first"):
+                strategy_kwargs["ref_first"] = args.ref_first
+            if hasattr(args, 'bit_th'):
+                strategy_kwargs['bit_th'] = args.bit_th
+            
+            handles = register_hooks_with_strategy(qnn.model, args.strategy, analysis_manager, exclude_modules=exclude_modules, **strategy_kwargs)
     ##############################################
 
     if args.inference:
@@ -255,12 +260,24 @@ def main(args):
             for i, sample in enumerate(samples):
                 save_image(sample, os.path.join(outdir, f"{count}.png"), normalize=True, value_range=(-1, 1))
                 count += 1
+        
+            ##################################################
+            if args.hook:
+                # Save analysis results for this round
+                if handles and args.analysis:
+                    analysis_dir = os.path.join(outpath, f"class{c}")
+                    analysis_manager.save_all_results(analysis_dir)
+                    logger.info(f"Analysis results saved for class {c}")
+                    
+                    # Clear results for next round
+                    analysis_manager.clear_results()
+            ##################################################
 
-    # After inference
-    if handles:
-        if args.analysis:
-            analysis_manager.save_all_results(outpath)
-        remove_hooks(handles)
+    ##################################################
+    if args.hook:
+        if handles:
+            remove_hooks(handles)
+    ##################################################
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -296,19 +313,30 @@ if __name__ == "__main__":
     parser.add_argument("--n_c", type=int, default=10, help="number of samples for each class for inference")
     parser.add_argument("--c_begin", type=int, default=0, help="begining class index for inference")
     parser.add_argument("--c_end", type=int, default=999, help="ending class index for inference")
-    ############## new ###############
-    parser.add_argument("--quant_info", action="store_true", help="analyze quantization paramaters")
-    parser.add_argument("--strategy", type=str, choices=["original", "spatial", "temporal", "cfg", "spatial_cfg", "cfg_large", "cfg_opt"], 
-                        help="Computation strategy for analysis", default="original")
-    parser.add_argument("--analysis", type=str, choices=["bitwidth", "similarity", "shape"],  
-                        help="Choose from: bitwidth, similarity, shape", default=None)
-    ##################################
-    parser.add_argument("--similarity-types", type=str, choices=["spatial", "temporal", "conditional"],  
-                        help="Types of similarity analysis to perform", default=None)
-    ##################################
+    ##################################################
+    parser.add_argument("--quant_info", action="store_true", default=False, 
+                        help="analyze quantization paramaters")
+    parser.add_argument("--hook", action="store_true", default=False, 
+                        help="Hook layers")
+    parser.add_argument("--strategy", type=str, 
+                        choices=["original", "spatial", "temporal", "cfg", "spatial_cfg", "cfg_large", "cfg_opt", "spatial_cfg_opt"], default="original", 
+                        help="Computation strategy for analysis")
+    parser.add_argument("--ref_first", action="store_true", default=False, 
+                        help="Use first row/column as reference for spatial difference")
+    parser.add_argument("--bit_th", type=int, default=4, 
+                        help="Bit threshold for large numbers computation")
+    parser.add_argument("--analysis", type=str, 
+                        choices=["bitwidth", "similarity", "shape"], default=None,  
+                        help="Choose from: bitwidth, similarity, shape")
+    parser.add_argument("--similarity-types", type=str, 
+                        choices=["spatial", "temporal", "conditional"], default=None, 
+                        help="Types of similarity analysis to perform")
+    ##################################################
     args = parser.parse_args()
-    if args.analysis:
-        print("Analyses to perform:", args.analysis)
-    else:
-        print("No analysis specified.")
+    logger.info("--hook:", args..hook)
+    logger.info("--strategy:", args.strategy)
+    logger.info("--ref_first:", args.ref_first)
+    logger.info("--bit_th:", args.bit_th)
+    logger.info("--analysis:", args.analysis)
+    logger.info("--similarity-types:", args.similarity_types)
     main(args)

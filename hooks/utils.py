@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Optional, List, Any, Callable, Dict
+from typing import Optional, List, Any, Callable, Dict, Tuple
 import logging
 
 from .hook import HookAnalysis
@@ -13,6 +13,7 @@ def register_hooks_with_strategy(
     model, 
     computation_type: str, 
     analysis_manager: TensorAnalysisManager,
+    include_modules: Optional[List[str]] = None,
     exclude_modules: Optional[List[str]] = None,
     **strategy_kwargs: Any
 ) -> List[Callable]:
@@ -24,13 +25,20 @@ def register_hooks_with_strategy(
     
     handles = []
     
-    from quant.quant_layer import QuantModule
+    try:
+        from quant.quant_layer import QuantModule   # DiT in PTQ4DiT
+    except ImportError:
+        from qdiff.quant_layer import QuantModule   # SDv1-4 in Q-Diffusion
     
     for name, module in model.named_modules():
         should_hook = False
         
-        if exclude_modules is not None:
-            should_hook = name not in exclude_modules and isinstance(module, QuantModule)
+        if include_modules is not None:
+            included = any(pattern in name for pattern in include_modules)
+            should_hook = included and isinstance(module, QuantModule)
+        elif exclude_modules is not None:
+            excluded = any(pattern in name for pattern in exclude_modules)
+            should_hook = not excluded and isinstance(module, QuantModule)
         else:
             should_hook = isinstance(module, QuantModule)
         
@@ -56,7 +64,7 @@ def setup_analysis_hooks(
     analyzers: Optional[List[str]] = None,
     analyzer_configs: Optional[Dict] = None,
     **strategy_kwargs: Any
-) -> tuple[TensorAnalysisManager, List[Callable]]:
+) -> Tuple[TensorAnalysisManager, List[Callable]]:
     
     analysis_manager = TensorAnalysisManager(analyzer_configs=analyzer_configs)
     

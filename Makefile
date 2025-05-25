@@ -147,10 +147,9 @@ run_strategy:
 		--n_c 1 \
 		--c_begin 0 \
 		--c_end 0 \
+		$(if $(filter True,$(hook)),--hook) \
 		$(if $(strategy),--strategy=$(strategy)) \
+		$(if $(filter True,$(ref_first)),--ref_first) \
+		$(if $(bit_th),--bit_th=$(bit_th)) \
 		$(if $(analysis),--analysis=$(analysis)) \
-		$(if $(filter similarity, $(analysis)),--similarity-types=$(similarity_type))
-
-# make run_strategy strategy=original analysis=bitwidth
-# make run_strategy strategy=original analysis=similarity similarity_type=spatial
-# make run_strategy strategy=original analysis=shape
+		$(if $(filter similarity,$(analysis)),--similarity-types=$(similarity_type))

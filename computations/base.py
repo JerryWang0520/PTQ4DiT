@@ -157,8 +157,17 @@ class ComputationStrategy(ABC):
         x_zp = module.act_quantizer.zero_point
         w_zp = module.weight_quantizer.zero_point
 
-        x_dq = module.act_quantizer(input[0])
-        w_dq = module.weight_quantizer(module.weight)
+        if hasattr(module, 'split') and module.split != 0:
+            x_dq_0 = module.act_quantizer  (input[0][:, :module.split , :, :])
+            x_dq_1 = module.act_quantizer_0(input[0][:,  module.split:, :, :])
+            x_dq = torch.cat([x_dq_0, x_dq_1], dim=1)
+            
+            w_dq_0 = module.weight_quantizer  (module.weight[:, :module.split , ...])
+            w_dq_1 = module.weight_quantizer_0(module.weight[:,  module.split:, ...])
+            w_dq = torch.cat([w_dq_0, w_dq_1], dim=1)
+        else:
+            x_dq = module.act_quantizer(input[0])
+            w_dq = module.weight_quantizer(module.weight)
 
         x_q = torch.round(x_dq / x_scale) + x_zp
         w_q = torch.round(w_dq / w_scale) + w_zp
@@ -204,10 +213,27 @@ class ComputationStrategy(ABC):
                     dilation=(dil_h, dil_w))
     
     def _output_rescaling(self, module, xw_q, x_scale, w_scale):
+        target_dtype = xw_q.dtype
         if module.fwd_func == F.conv2d:
-            y_dq = xw_q * x_scale * w_scale.permute(1, 0, 2, 3) + module.bias.unsqueeze(0).unsqueeze(2).unsqueeze(3)
+            x_scale = x_scale.to(target_dtype)
+            w_scale = w_scale.to(target_dtype)
+            bias    = module.bias.to(target_dtype) if module.bias is not None else 0
+
+            scale = x_scale * w_scale
+            scale = scale.permute(1, 0, 2, 3)
+            bias  = bias.view(1, -1, 1, 1)
+            
+            y_dq = xw_q * scale + bias
         elif module.fwd_func == F.linear:
-            y_dq = xw_q * x_scale * w_scale.permute(1, 0) + module.bias
+            x_scale = x_scale.to(target_dtype)
+            w_scale = w_scale.to(target_dtype)
+            bias    = module.bias.to(target_dtype) if module.bias is not None else 0
+
+            scale = x_scale * w_scale
+            scale = scale.permute(1, 0)
+            bias  = bias
+
+            y_dq = xw_q * scale + bias
         else:
             raise Exception("Unsupported fwd_func")
             
