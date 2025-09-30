@@ -1,14 +1,20 @@
 import os
 from collections import defaultdict
 from typing import Dict, List, Optional, Any
-from .analyzers import BitwidthAnalyzer, StatisticsAnalyzer, DistributionAnalyzer
+from .analyzers import StatisticsAnalyzer, DistributionAnalyzer
+from .bitwidth_analyzer import BitwidthAnalyzer
 from .similarity_analyzer import StatefulSimilarityAnalyzer
 from .shape_analyzer import ShapeAnalyzer
+# from .bitslice_amount_analyzer import BitSliceAmountAnalyzer
 from .base import TensorAnalyzer
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class TensorAnalysisManager:
-    def __init__(self, active_analyzer=None, analyzer_configs=None):
+    def __init__(self, sample=False, active_analyzer=None, analyzer_configs=None):
+        self.sample = sample
         self.analyzer_configs = analyzer_configs or {}
 
         self.all_analyzers = {
@@ -16,21 +22,26 @@ class TensorAnalysisManager:
             "statistics": StatisticsAnalyzer(),
             "distribution": DistributionAnalyzer(),
             "similarity": StatefulSimilarityAnalyzer(**self.analyzer_configs.get('similarity', {})),
-            "shape": ShapeAnalyzer()
+            "shape": ShapeAnalyzer(),
+            # "bitslice_amount": BitSliceAmountAnalyzer(),
         }
         
         # Set active analyzer
-        if active_analyzer:
-            self.analyzers = {k: v for k, v in self.all_analyzers.items() if k == active_analyzer}
-            print("active_analyzer:", active_analyzer)
+        if self.sample:
+            self.analyzers = {}
         else:
-            self.analyzers = None
+            if active_analyzer:
+                self.analyzers = {k: v for k, v in self.all_analyzers.items() if k == active_analyzer}
+                logger.info(f"active_analyzer: {active_analyzer}")
+            else:
+                self.analyzers = {}
         
         self.results = defaultdict(lambda: defaultdict(dict))
         self.output_dir = None
     
     def add_analyzer(self, name: str, analyzer: TensorAnalyzer) -> None:
-        self.analyzers[name] = analyzer
+        if not self.sample:
+            self.analyzers[name] = analyzer
     
     def remove_analyzer(self, name: str) -> None:
         if name in self.analyzers:
@@ -45,7 +56,7 @@ class TensorAnalysisManager:
             try:
                 results[analyzer_name] = analyzer.analyze(tensor, module_info=module_info, **kwargs)
             except Exception as e:
-                print(f"Error in {analyzer_name} analyzer: {e}")
+                logger.error(f"Error in {analyzer_name} analyzer: {e}")
                 results[analyzer_name] = {"error": str(e)}
                 return {}
         

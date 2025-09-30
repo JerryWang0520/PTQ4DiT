@@ -33,9 +33,17 @@ def main(args):
     # Setup save path:
     os.makedirs(args.outdir, exist_ok=True)
 
-    ### Save in the same directory
-    outpath = os.path.join(args.outdir, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
-    # outpath = os.path.join(args.outdir, "test")
+    ##################################################
+    if args.sample:
+        # outpath = os.path.join(args.outdir, "samples")
+        outpath = os.path.join(args.outdir, "samples_10K")
+        # outpath = os.path.join(args.outdir, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
+    else:
+        # outpath = os.path.join(args.outdir, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
+        outpath = os.path.join(args.outdir, "Final")
+        # outpath = os.path.join(args.outdir, "test")
+    ##################################################
+
     if not os.path.exists(outpath):
         os.makedirs(outpath)
         
@@ -52,6 +60,23 @@ def main(args):
     logger = logging.getLogger(__name__)
     logger.info(f"Arguments: {args}")
     logger.info(f"Saving to {outpath}")
+
+    ##################################################
+    logger.info(f"===== Arguments =====")
+    logger.info(f"--hook: {args.hook}")
+    logger.info(f"--strategy: {args.strategy}")
+    logger.info(f"--ref_first: {args.ref_first}")
+    logger.info(f"--bit_th: {args.bit_th}")
+    logger.info(f"--clamp: {args.clamp}")
+    logger.info(f"--analysis: {args.analysis}")
+    logger.info(f"--similarity-types: {args.similarity_types}")
+    logger.info(f"--bitslice-method: {args.bitslice_method}")
+    logger.info(f"--bitslice-bits: {args.bitslice_bits}")
+    logger.info(f"--bitslice-width: {args.bitslice_width}")
+    logger.info(f"--bitslice-keep-overflow: {args.bitslice_keep_overflow}")
+    logger.info(f"--bitslice-clamp: {args.bitslice_clamp}")
+    logger.info(f"===== Arguments =====\n")
+    ##################################################
 
     # Setup PyTorch:
     torch.manual_seed(args.seed)
@@ -196,30 +221,64 @@ def main(args):
     ##############################################
     if args.hook:
         from analyses.manager import TensorAnalysisManager
-        from hooks.utils import register_hooks_with_strategy, remove_hooks
+        from hooks.utils import register_analysis_hooks, remove_hooks
 
-        if args.strategy:
-            analyzer_configs = {}
-            if args.analysis == "similarity" and args.similarity_types:
-                analyzer_configs['similarity'] = {'active_analysis': args.similarity_types}
-            analysis_manager = TensorAnalysisManager(active_analyzer=args.analysis, analyzer_configs=analyzer_configs)
+        analyzer_configs = {}
+        if args.analysis == "similarity" and args.similarity_types:
+            analyzer_configs['similarity'] = {'active_analysis': args.similarity_types, 'ref_first': args.ref_first}
+        analysis_manager = TensorAnalysisManager(sample=args.sample, active_analyzer=args.analysis, analyzer_configs=analyzer_configs)
 
-            # handles = register_hooks_with_strategy(qnn.model, args.strategy, analysis_manager)
-            # handles = register_hooks_with_strategy(qnn.model, args.strategy, analysis_manager, exclude_modules=["x_embedder.proj"])
+        # include_modules = []
+        # exclude_modules = []
 
-            # total 114 modules hooked
-            # include_modules = []
-            # exclude_modules = []
-            exclude_modules = ["t_embedder", "adaLN_modulation.1"]
-            print("exclude_modules:", exclude_modules)
+        # total 114 modules hooked
+        # include_modules = None
+        # exclude_modules = ["t_embedder", "adaLN_modulation.1"]
 
-            strategy_kwargs = {}
-            if hasattr(args, "ref_first"):
-                strategy_kwargs["ref_first"] = args.ref_first
-            if hasattr(args, 'bit_th'):
-                strategy_kwargs['bit_th'] = args.bit_th
-            
-            handles = register_hooks_with_strategy(qnn.model, args.strategy, analysis_manager, exclude_modules=exclude_modules, **strategy_kwargs)
+        # total 1 module hooked, only hook conv2d
+        # include_modules = ["x_embedder.proj"]
+        # exclude_modules = None
+
+        # total 1 module hooked (save tile)
+        # include_modules = ["blocks.0.mlp.fc2"]
+        include_modules = ["blocks.27.mlp.fc2"]
+        exclude_modules = None
+
+        logger.info(f"include_modules: {include_modules}")
+        logger.info(f"exclude_modules: {exclude_modules}")
+
+        strategy_kwargs = {
+            "ref_first": args.ref_first,
+            "bit_th"   : args.bit_th,
+            "clamp"    : args.clamp,
+            "save"     : True,  #!
+            # "save"     : False,
+        }
+        
+        bitslice_kwargs = {
+            "bits"            : args.bitslice_bits,
+            "slice_width"     : args.bitslice_width,
+            "discard_overflow": not args.bitslice_keep_overflow,
+            "bitslice_clamp"  : args.bitslice_clamp,
+        }
+
+        saver_kwargs = {
+            "enabled": True,    #!
+            # "enabled": False,
+            "save_dir": outpath,
+        }
+
+        handles = register_analysis_hooks(
+            qnn.model, 
+            analysis_manager,
+            computation_strategy=args.strategy,
+            bitslice_method=args.bitslice_method,
+            bitslice_kwargs=bitslice_kwargs,
+            include_modules=include_modules,
+            exclude_modules=exclude_modules,
+            saver_kwargs=saver_kwargs,
+            **strategy_kwargs
+        )
     ##############################################
 
     if args.inference:
@@ -264,7 +323,7 @@ def main(args):
             ##################################################
             if args.hook:
                 # Save analysis results for this round
-                if handles and args.analysis:
+                if handles and analysis_manager.analyzers:
                     analysis_dir = os.path.join(outpath, f"class{c}")
                     analysis_manager.save_all_results(analysis_dir)
                     logger.info(f"Analysis results saved for class {c}")
@@ -314,29 +373,20 @@ if __name__ == "__main__":
     parser.add_argument("--c_begin", type=int, default=0, help="begining class index for inference")
     parser.add_argument("--c_end", type=int, default=999, help="ending class index for inference")
     ##################################################
-    parser.add_argument("--quant_info", action="store_true", default=False, 
-                        help="analyze quantization paramaters")
-    parser.add_argument("--hook", action="store_true", default=False, 
-                        help="Hook layers")
-    parser.add_argument("--strategy", type=str, 
-                        choices=["original", "spatial", "temporal", "cfg", "spatial_cfg", "cfg_large", "cfg_opt", "spatial_cfg_opt"], default="original", 
-                        help="Computation strategy for analysis")
-    parser.add_argument("--ref_first", action="store_true", default=False, 
-                        help="Use first row/column as reference for spatial difference")
-    parser.add_argument("--bit_th", type=int, default=4, 
-                        help="Bit threshold for large numbers computation")
-    parser.add_argument("--analysis", type=str, 
-                        choices=["bitwidth", "similarity", "shape"], default=None,  
-                        help="Choose from: bitwidth, similarity, shape")
-    parser.add_argument("--similarity-types", type=str, 
-                        choices=["spatial", "temporal", "conditional"], default=None, 
-                        help="Types of similarity analysis to perform")
+    # parser.add_argument("--quant_info", action="store_true", default=False, help="analyze quantization paramaters")
+    parser.add_argument("--hook", action="store_true", default=False, help="Hook layers")
+    parser.add_argument("--strategy", type=str, choices=["original", "spatial", "temporal", "cfg", "spatial_cfg", "cfg_large", "cfg_opt", "spatial_cfg_opt", "Raw_SD", "Raw_TD", "SD_TD"], default="original", help="Computation strategy for analysis")
+    parser.add_argument("--ref_first", action="store_true", default=False, help="Use first row/column as reference for spatial difference")
+    parser.add_argument("--bit_th", type=int, default=4, help="Bit threshold for large numbers computation")
+    parser.add_argument("--clamp", action="store_true", default=False, help="Clamp input activations into int8")
+    parser.add_argument("--analysis", type=str, choices=["bitwidth", "similarity", "shape"], default=None, help="Choose from: bitwidth, similarity, shape")
+    parser.add_argument("--similarity-types", type=str, choices=["spatial", "temporal", "conditional"], default=None, help="Types of similarity analysis to perform")    
+    parser.add_argument("--sample", action="store_true", default=False, help="generate samples")    
+    parser.add_argument("--bitslice-method", type=str, choices=["bada", "none"], default="none", help="Bitslice method")
+    parser.add_argument("--bitslice-bits", type=int, default=9, help="Bitwidth for bitslice method")
+    parser.add_argument("--bitslice-width", type=int, default=3, help="Width of each bitslice")
+    parser.add_argument("--bitslice-keep-overflow", action="store_true", default=False, help="Keep overflow slice in bitslice method")
+    parser.add_argument("--bitslice-clamp", action="store_true", default=False, help="Clamp reconstructed bitslice value to be not overflow")
     ##################################################
     args = parser.parse_args()
-    logger.info("--hook:", args..hook)
-    logger.info("--strategy:", args.strategy)
-    logger.info("--ref_first:", args.ref_first)
-    logger.info("--bit_th:", args.bit_th)
-    logger.info("--analysis:", args.analysis)
-    logger.info("--similarity-types:", args.similarity_types)
     main(args)

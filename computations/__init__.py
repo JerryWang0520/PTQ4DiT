@@ -8,6 +8,9 @@ from .strategies import (
     LargeNumbersCFGDifferenceComputation,
     OptimalCFGDifferenceComputation,
     SpatialOptimalCFGDifferenceComputation,
+    Raw_SD_Computation,
+    Raw_TD_Computation,
+    SD_TD_Computation,
     create_strategy
 )
 
@@ -21,5 +24,8 @@ __all__ = [
     'LargeNumbersCFGDifferenceComputation',
     'OptimalCFGDifferenceComputation',
     'SpatialOptimalCFGDifferenceComputation',
+    'Raw_SD_Computation',
+    'Raw_TD_Computation',
+    'SD_TD_Computation',
     'create_strategy'
 ]

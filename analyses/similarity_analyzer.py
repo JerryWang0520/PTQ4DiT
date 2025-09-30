@@ -6,17 +6,20 @@ from .base import TensorAnalyzer
 
 
 class StatefulSimilarityAnalyzer(TensorAnalyzer):
-    def __init__(self, active_analysis=None):
+    def __init__(self, active_analysis: bool = None, ref_first: bool = False):
         super().__init__()
         self.prev_tensors = {}  # {module_name: {step: tensor}}
         self.active_analysis = active_analysis
+        self.ref_first = ref_first
+        print("active_analysis:", self.active_analysis)
+        print("ref_first:", self.ref_first)
         
     def analyze(self, tensor: torch.Tensor, module_info: Optional[Dict] = None, **kwargs) -> Dict[str, Any]:
         if module_info is None:
             return {}
             
         module_name = module_info.get('name', '')
-        step = module_info.get('step', 0)
+        step = module_info.get('step', -1)
         fwd_func = module_info.get('fwd_func', None)
 
         results = {}
@@ -33,12 +36,11 @@ class StatefulSimilarityAnalyzer(TensorAnalyzer):
             if module_name not in self.prev_tensors:
                 self.prev_tensors[module_name] = {}
             
-            prev_step = step - 1
-            if prev_step in self.prev_tensors.get(module_name, {}):
-                prev_tensor = self.prev_tensors[module_name][prev_step]
+            if 'step' in self.prev_tensors[module_name] and self.prev_tensors[module_name]['step'] == step - 1:
+                prev_tensor = self.prev_tensors[module_name]['tensor']
                 results['temporal'] = self._analyze_temporal_similarity(tensor, prev_tensor)
-        
-            self.prev_tensors[module_name][step] = tensor.clone()
+            
+            self.prev_tensors[module_name] = {"step": step, "tensor": tensor.clone()}
         
         # 3. Conditional/unconditional similarity
         if self.active_analysis == 'conditional':
@@ -47,7 +49,7 @@ class StatefulSimilarityAnalyzer(TensorAnalyzer):
                 
         return results
     
-    def _analyze_conv2d_similarity(self, tensor: torch.Tensor, ref_first: bool = False) -> Dict[str, float]:
+    def _analyze_conv2d_similarity(self, tensor: torch.Tensor) -> Dict[str, float]:
         if tensor.dim() != 3:
             return {}
         
@@ -55,7 +57,7 @@ class StatefulSimilarityAnalyzer(TensorAnalyzer):
         batch_size, seq_length, embedding_dim = tensor.shape
         
         # Analyze similarity between channels (columns)
-        if ref_first:
+        if self.ref_first:
             for batch_idx in range(batch_size):
                 channel1 = tensor[batch_idx, :, 0]
                 for i in range(1, embedding_dim):
@@ -84,18 +86,15 @@ class StatefulSimilarityAnalyzer(TensorAnalyzer):
             'max': float(np.max(similarities))
         }
     
-    def _analyze_linear_similarity(self, tensor: torch.Tensor, ref_first: bool = False) -> Dict[str, float]:
-        if tensor.dim() not in [2, 3]:
+    def _analyze_linear_similarity(self, tensor: torch.Tensor) -> Dict[str, float]:       
+        if tensor.dim() != 3:
             return {}
-        
-        if tensor.dim() == 2:
-            tensor = tensor.unsqueeze(0)  # (N, D) -> (1, N, D)
         
         similarities = []
         batch_size, seq_length, embedding_dim = tensor.shape
         
         # Analyze similarity between tokens (rows)
-        if ref_first:
+        if self.ref_first:
             for batch_idx in range(batch_size):
                 token1 = tensor[batch_idx, 0, :]
                 for i in range(1, seq_length):
@@ -127,32 +126,53 @@ class StatefulSimilarityAnalyzer(TensorAnalyzer):
     def _analyze_temporal_similarity(self, current: torch.Tensor, previous: torch.Tensor) -> Dict[str, float]:
         if current.shape != previous.shape:
             return {}
+        
+        if current.dim() != 3:
+            return {}
 
-        # Flatten tensors for overall similarity
-        current_flat = current.flatten()
-        previous_flat = previous.flatten()
+        similarities = []
+        batch_size, seq_length, embedding_dim = current.shape
+
+        # Calculate similarity between corresponding pairs
+        for batch_idx in range(batch_size):
+            for i in range(seq_length):
+                token1 = current[batch_idx, i, :]
+                token2 = previous[batch_idx, i, :]
+                
+                if token1.norm() > 0 and token2.norm() > 0:
+                    sim = F.cosine_similarity(token1.unsqueeze(0), token2.unsqueeze(0)).item()
+                    similarities.append(sim)
         
-        if current_flat.norm() == 0 or previous_flat.norm() == 0:
-            return {'similarity': 0.0}
+        if not similarities:
+            return {}
         
-        similarity = F.cosine_similarity(current_flat.unsqueeze(0), previous_flat.unsqueeze(0)).item()
-        
-        return {'similarity': float(similarity)}
+        return {
+            'mean': float(np.mean(similarities)),
+            'std': float(np.std(similarities)),
+            'min': float(np.min(similarities)),
+            'max': float(np.max(similarities))
+        }
     
     def _analyze_conditional_similarity(self, tensor: torch.Tensor) -> Dict[str, float]:
+        if tensor.dim() != 3:
+            return {}
+        
         half_batch = tensor.size(0) // 2
         cond_tensor = tensor[:half_batch]
         uncond_tensor = tensor[half_batch:]
         
-        # Calculate similarity between corresponding pairs
         similarities = []
-        for i in range(half_batch):
-            cond_flat = cond_tensor[i].flatten()
-            uncond_flat = uncond_tensor[i].flatten()
-            
-            if cond_flat.norm() > 0 and uncond_flat.norm() > 0:
-                sim = F.cosine_similarity(cond_flat.unsqueeze(0), uncond_flat.unsqueeze(0)).item()
-                similarities.append(sim)
+        batch_size, seq_length, embedding_dim = cond_tensor.shape
+
+        # Calculate similarity between corresponding pairs
+        for batch_idx in range(batch_size):
+            for i in range(seq_length):
+                token1 = cond_tensor[batch_idx, i, :]
+                token2 = uncond_tensor[batch_idx, i, :]
+                
+                if token1.norm() > 0 and token2.norm() > 0:
+                    sim = F.cosine_similarity(token1.unsqueeze(0), token2.unsqueeze(0)).item()
+                    similarities.append(sim)
         
         if not similarities:
             return {}
@@ -213,7 +233,7 @@ class StatefulSimilarityAnalyzer(TensorAnalyzer):
         if temporal_data:
             csv_path = os.path.join(output_path, 'temporal_similarity.csv')
             with open(csv_path, 'w', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=['module', 'step', 'tensor_type', 'similarity'])
+                writer = csv.DictWriter(f, fieldnames=['module', 'step', 'tensor_type', 'mean', 'std', 'min', 'max'])
                 writer.writeheader()
                 writer.writerows(temporal_data)
         

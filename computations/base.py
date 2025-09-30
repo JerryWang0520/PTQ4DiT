@@ -5,8 +5,33 @@ import torch.nn.functional as F
 
 
 class ComputationStrategy(ABC):
-    def __init__(self):
+    def __init__(self, clamp=False, bitslice_strategy=None, save=False):
         self.tensors = {}
+        self.save_tensors = {}
+        self.clamp = clamp
+        self.bitslice_strategy = bitslice_strategy
+        self.save = save
+
+        should_assert = (
+            (not self.clamp and not self.bitslice_strategy) or \
+            (not self.clamp and     self.bitslice_strategy and not self.bitslice_strategy.discard_overflow and not self.bitslice_strategy.bitslice_clamp)
+        )
+
+        self.should_assert = should_assert
+
+    def get_tensors_to_analyze(self) -> Dict[str, torch.Tensor]:
+        return self.tensors
+
+    def get_tensors_to_save(self) -> Dict[str, torch.Tensor]:
+        return self.save_tensors
+        
+    def apply_bitslice_reconstruction(self, tensor):
+        if self.bitslice_strategy:
+            if self.bitslice_strategy.bitslice_clamp:
+                return self.bitslice_strategy.reconstruct(torch.clamp(tensor, -256, 219))
+            else:
+                return self.bitslice_strategy.reconstruct(tensor)
+        return tensor
 
     def fwd_func(self, module, name, input, weight):
         if module.fwd_func == F.conv2d:
@@ -19,19 +44,20 @@ class ComputationStrategy(ABC):
             raise Exception(f"Unsupported fwd_func in {name}")
         
         return output
-    
+
     def get_Raw_input(self, module, name, tensor):
         tensor = tensor.clone()
 
         if module.fwd_func == F.conv2d:
             fold_params = self._get_fold_params(module)
             tensor = F.unfold(tensor, **fold_params)
+            # print(f"unfold tensor shape: {tensor.shape}")
         elif module.fwd_func == F.linear:
             pass
         else:
             raise Exception(f"Unsupported fwd_func in {name}")
-
-        return tensor
+        
+        return torch.clamp(tensor, -128, 127) if self.clamp else tensor
 
     def get_Raw_output(self, module, name, tensor, shape):
         tensor = tensor.clone()
@@ -42,9 +68,9 @@ class ComputationStrategy(ABC):
             pass
         else:
             raise Exception(f"Unsupported fwd_func in {name}")
-
+        
         return tensor
-    
+
     def get_SD_input(self, module, name, tensor, ref_first=False):
         tensor = tensor.clone()
 
@@ -73,7 +99,7 @@ class ComputationStrategy(ABC):
         else:
             raise Exception(f"Unsupported fwd_func in {name}")
 
-        return tensor
+        return torch.clamp(tensor, -128, 127) if self.clamp else tensor
 
     def get_SD_output(self, module, name, tensor, shape, ref_first=False):
         tensor = tensor.clone()
@@ -109,8 +135,8 @@ class ComputationStrategy(ABC):
         else:
             raise Exception(f"Unsupported fwd_func in {name}")
         
-        return tensor
-    
+        return torch.clamp(tensor, -128, 127) if self.clamp else tensor
+
     def get_TD_output(self, module, name, tensor, tensor_prev, shape):
         tensor = tensor.clone()
 
@@ -136,7 +162,7 @@ class ComputationStrategy(ABC):
         else:
             raise Exception(f"Unsupported fwd_func in {name}")
         
-        return tensor
+        return torch.clamp(tensor, -128, 127) if self.clamp else tensor
 
     def get_CUD_output(self, module, name, tensor, tensor_ref, shape):
         tensor = tensor.clone()
@@ -171,6 +197,8 @@ class ComputationStrategy(ABC):
 
         x_q = torch.round(x_dq / x_scale) + x_zp
         w_q = torch.round(w_dq / w_scale) + w_zp
+        # print(f"x_q dtype: {x_q.dtype}")
+        # print(f"w_q dtype: {w_q.dtype}")
         
         return {
             'x_scale': x_scale,
@@ -241,8 +269,4 @@ class ComputationStrategy(ABC):
 
     @abstractmethod
     def compute(self, module, input, output, name) -> torch.Tensor:
-        pass
-
-    @abstractmethod
-    def get_tensors_to_analyze(self) -> Dict[str, torch.Tensor]:
         pass
