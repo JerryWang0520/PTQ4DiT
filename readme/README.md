@@ -87,6 +87,22 @@ python evaluations/evaluator.py <COMPRESSED REFERENCE FILE> <COMPRESSED SAMPLE F
 
 Download reference batches from the [guided-diffusion evaluations](https://github.com/openai/guided-diffusion/tree/main/evaluations).
 
+### Hardware Pattern Generation
+Hook and save computation patterns:
+```bash
+make run_strategy save_tile=True
+tar zcvf <FileName.tar.gz> <DirName>
+
+# Example:
+# make run_strategy outdir=output/patterns/original n_c=1 c_begin=0 c_end=0 hook=True strategy=original    save_tile=True path_reverse=False
+```
+
+Create test patterns:
+```bash
+python saver/tensor_saver.py
+tar zcvf <FileName.tar.gz> <DirName>
+```
+
 ## Citation
 
 If you use this work, please cite the original PTQ4DiT and q-diffusion papers along with acknowledging the differential and bit-slice computing extensions.
