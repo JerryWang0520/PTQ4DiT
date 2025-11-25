@@ -2,6 +2,11 @@
 *.pth
 __pycache__/
 *.log
-cali*
 output
+
 pretrained_models
+calib
+cali_ckpt
+
+eval_batch
+classify_image_graph_def.pb

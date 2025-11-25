@@ -11,6 +11,7 @@ from .strategies import (
     Raw_SD_Computation,
     Raw_TD_Computation,
     SD_TD_Computation,
+    TD_GD_Computation,
     create_strategy
 )
 
@@ -27,5 +28,6 @@ __all__ = [
     'Raw_SD_Computation',
     'Raw_TD_Computation',
     'SD_TD_Computation',
+    'TD_GD_Computation',
     'create_strategy'
 ]

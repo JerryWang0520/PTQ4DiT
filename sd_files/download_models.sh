@@ -1,0 +1,1 @@
+../../q-diffusion/download_models.sh

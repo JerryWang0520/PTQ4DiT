@@ -27,23 +27,28 @@ import numpy as np
 from quant.layer_recon import layer_reconstruction
 from quant.block_recon import block_reconstruction
 
+from functools import partial
+from hook import hook_original
+from hook import hook_SD
+from hook import hook_TD
+from hook import hook_CUD
+from hook import hook_quant_info
+from analysis import save_counts_to_csv
+
+from analyses.manager import TensorAnalysisManager
+from hooks.utils import register_hooks_with_strategy, remove_hooks
+# One-line setup
+from hooks.utils import setup_analysis_hooks
+
 logger = logging.getLogger(__name__)
 
 def main(args):
     # Setup save path:
     os.makedirs(args.outdir, exist_ok=True)
 
-    ##################################################
-    if args.sample:
-        outpath = os.path.join(args.outdir, "samples")
-        # outpath = os.path.join(args.outdir, "samples_10K")
-        # outpath = os.path.join(args.outdir, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
-    else:
-        # outpath = os.path.join(args.outdir, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
-        outpath = os.path.join(args.outdir, "Final")
-        # outpath = os.path.join(args.outdir, "test")
-    ##################################################
-
+    ### Save in the same directory
+    outpath = os.path.join(args.outdir, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
+    # outpath = os.path.join(args.outdir, "test")
     if not os.path.exists(outpath):
         os.makedirs(outpath)
         
@@ -60,27 +65,6 @@ def main(args):
     logger = logging.getLogger(__name__)
     logger.info(f"Arguments: {args}")
     logger.info(f"Saving to {outpath}")
-
-    ##################################################
-    logger.info(f"===== Arguments =====")
-    logger.info(f"--hook: {args.hook}")
-    logger.info(f"--strategy: {args.strategy}")
-    logger.info(f"--ref_first: {args.ref_first}")
-    logger.info(f"--bit_th: {args.bit_th}")
-    logger.info(f"--clamp: {args.clamp}")
-    logger.info(f"--analysis: {args.analysis}")
-    logger.info(f"--similarity-types: {args.similarity_types}")
-    logger.info(f"--bitslice-method: {args.bitslice_method}")
-    logger.info(f"--bitslice-bits: {args.bitslice_bits}")
-    logger.info(f"--bitslice-width: {args.bitslice_width}")
-    logger.info(f"--bitslice-keep-overflow: {args.bitslice_keep_overflow}")
-    logger.info(f"--bitslice-clamp: {args.bitslice_clamp}")
-    logger.info(f"--scheme: {args.scheme}")
-    logger.info(f"--path-reverse: {args.path_reverse}")
-    logger.info(f"--save-tile: {args.save_tile}")
-    logger.info(f"--performance: {args.performance}")
-    logger.info(f"===== Arguments =====\n")
-    ##################################################
 
     # Setup PyTorch:
     torch.manual_seed(args.seed)
@@ -223,69 +207,72 @@ def main(args):
     ##############################################
     ###  Hooks for difference computing        ###
     ##############################################
-    if args.hook:
-        from analyses.manager import TensorAnalysisManager
-        from hooks.utils import register_analysis_hooks, remove_hooks
 
-        analyzer_configs = {}
-        if args.analysis == "similarity" and args.similarity_types:
-            analyzer_configs['similarity'] = {'active_analysis': args.similarity_types, 'ref_first': args.ref_first}
-        output_dir = outpath if args.bitslice_method != "none" else None    #! only for bitslice performance
-        analysis_manager = TensorAnalysisManager(sample=args.sample, active_analyzer=args.analysis, analyzer_configs=analyzer_configs, output_dir=output_dir)
+    def register_hook_original(model):
+        for name, module in model.named_modules():
+            if isinstance(module, QuantModule):
+                module.register_forward_hook(partial(hook_original, name=name))
 
-        # include_modules = []
-        # exclude_modules = []
+    def register_hook_spatial(model):
+        for name, module in model.named_modules():
+            if isinstance(module, QuantModule):
+                module.register_forward_hook(partial(hook_SD, name=name))
 
-        # total 114 modules hooked
-        # include_modules = None
-        # exclude_modules = ["t_embedder", "adaLN_modulation.1"]
+    def register_hook_temporal(model):
+        for name, module in model.named_modules():
+            if isinstance(module, QuantModule):
+                module.register_forward_hook(partial(hook_TD, name=name))
 
-        # total 1 module hooked, only hook conv2d
-        # include_modules = ["x_embedder.proj"]
-        # exclude_modules = None
+    def register_hook_cfg(model):
+        for name, module in model.named_modules():
+            if isinstance(module, QuantModule):
+                module.register_forward_hook(partial(hook_CUD, name=name))
 
-        # total 1 module hooked (save tile)
-        include_modules = ["blocks.0.mlp.fc2"]
-        # include_modules = ["blocks.27.mlp.fc2"]
-        # include_modules = ["blocks.0.mlp.fc2", "blocks.27.mlp.fc2"]
-        exclude_modules = None
+    def register_hook_quant(model, output_dir="output"):
+        for name, module in model.named_modules():
+            if isinstance(module, QuantModule):
+                module.register_forward_hook(partial(hook_quant_info, name=name, output_dir=os.path.join(output_dir, "quant_info")))
 
-        logger.info(f"include_modules: {include_modules}")
-        logger.info(f"exclude_modules: {exclude_modules}")
+    # This will hook all quantized layers
+    if args.original:
+        register_hook_original(qnn.model)
+    if args.SD:
+        register_hook_spatial(qnn.model)
+    if args.TD:
+        register_hook_temporal(qnn.model)
+    if args.CUD:
+        register_hook_cfg(qnn.model)
+    # if args.quant_info:
+    #     register_hook_quant(qnn.model, outpath)
 
-        strategy_kwargs = {
-            "ref_first": args.ref_first,
-            "bit_th"   : args.bit_th,
-            "clamp"    : args.clamp,
-            "save"     : args.save_tile,
-            "scheme"   : args.scheme,
-            "path_reverse": args.path_reverse,
-            "performance": args.performance,
-        }
-        
-        bitslice_kwargs = {
-            "bits"            : args.bitslice_bits,
-            "slice_width"     : args.bitslice_width,
-            "discard_overflow": not args.bitslice_keep_overflow,
-            "bitslice_clamp"  : args.bitslice_clamp,
-        }
+    ## Hook certain layers, back-up
+    # if args.original:
+    #     qnn.model.x_embedder.proj.register_forward_hook(partial(hook_original, name=f"model.x_embedder.proj"))
+    #     qnn.model.blocks[0].adaLN_modulation[1].register_forward_hook(partial(hook_original, name=f"model.blocks[0].adaLN_modulation.1"))
+    #     for i in range(28):
+    #         qnn.model.blocks[i].mlp.fc1.register_forward_hook(partial(hook_original, name=f"model.blocks.{i}.mlp.fc1"))
+    #         qnn.model.blocks[i].mlp.fc2.register_forward_hook(partial(hook_original, name=f"model.blocks.{i}.mlp.fc2"))
+    # if args.SD:
+    #     qnn.model.x_embedder.proj.register_forward_hook(partial(hook_SD, name=f"model.x_embedder.proj"))
+    #     for i in range(1):
+    #         qnn.model.blocks[i].mlp.fc1.register_forward_hook(partial(hook_SD, name=f"model.blocks.{i}.mlp.fc1"))
+    #         qnn.model.blocks[i].mlp.fc2.register_forward_hook(partial(hook_SD, name=f"model.blocks.{i}.mlp.fc2"))
+    # if args.TD:
+    #     qnn.model.x_embedder.proj.register_forward_hook(partial(hook_TD, name=f"model.x_embedder.proj"))
+    #     for i in range(28):
+    #         qnn.model.blocks[i].mlp.fc1.register_forward_hook(partial(hook_TD, name=f"model.blocks.{i}.mlp.fc1"))
+    #         qnn.model.blocks[i].mlp.fc2.register_forward_hook(partial(hook_TD, name=f"model.blocks.{i}.mlp.fc2"))
+    # if args.CUD:
+    #     qnn.model.x_embedder.proj.register_forward_hook(partial(hook_CUD, name=f"model.x_embedder.proj"))
+    #     for i in range(28):
+    #         qnn.model.blocks[i].mlp.fc1.register_forward_hook(partial(hook_CUD, name=f"model.blocks.{i}.mlp.fc1"))
+    #         qnn.model.blocks[i].mlp.fc2.register_forward_hook(partial(hook_CUD, name=f"model.blocks.{i}.mlp.fc2"))
+    # if args.quant_info:
+    #     for i in range(28):
+    #         qnn.model.blocks[i].mlp.fc1.register_forward_hook(partial(hook_quant_info, name=f"model.blocks.{i}.mlp.fc1", output_dir=os.path.join(outpath, "quant_info")))
+    #         qnn.model.blocks[i].mlp.fc2.register_forward_hook(partial(hook_quant_info, name=f"model.blocks.{i}.mlp.fc2", output_dir=os.path.join(outpath, "quant_info")))
 
-        saver_kwargs = {
-            "enabled": args.save_tile,
-            "save_dir": outpath,
-        }
-
-        handles = register_analysis_hooks(
-            qnn.model, 
-            analysis_manager,
-            computation_strategy=args.strategy,
-            bitslice_method=args.bitslice_method,
-            bitslice_kwargs=bitslice_kwargs,
-            include_modules=include_modules,
-            exclude_modules=exclude_modules,
-            saver_kwargs=saver_kwargs,
-            **strategy_kwargs
-        )
+    print(qnn.model)
     ##############################################
 
     if args.inference:
@@ -326,24 +313,8 @@ def main(args):
             for i, sample in enumerate(samples):
                 save_image(sample, os.path.join(outdir, f"{count}.png"), normalize=True, value_range=(-1, 1))
                 count += 1
-        
-            ##################################################
-            if args.hook:
-                # Save analysis results for this round
-                if handles and analysis_manager.analyzers:
-                    analysis_dir = os.path.join(outpath, f"class{c}")
-                    analysis_manager.save_all_results(analysis_dir)
-                    logger.info(f"Analysis results saved for class {c}")
-                    
-                    # Clear results for next round
-                    analysis_manager.clear_results()
-            ##################################################
 
-    ##################################################
-    if args.hook:
-        if handles:
-            remove_hooks(handles)
-    ##################################################
+    # save_counts_to_csv(qnn.model, output_dir=os.path.join(outpath, "bitwidth_analysis"))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -379,25 +350,12 @@ if __name__ == "__main__":
     parser.add_argument("--n_c", type=int, default=10, help="number of samples for each class for inference")
     parser.add_argument("--c_begin", type=int, default=0, help="begining class index for inference")
     parser.add_argument("--c_end", type=int, default=999, help="ending class index for inference")
-    ##################################################
-    # parser.add_argument("--quant_info", action="store_true", default=False, help="analyze quantization paramaters")
-    parser.add_argument("--hook", action="store_true", default=False, help="Hook layers")
-    parser.add_argument("--strategy", type=str, choices=["original", "spatial", "temporal", "cfg", "spatial_cfg", "cfg_large", "cfg_opt", "spatial_cfg_opt", "Raw_SD", "Raw_TD", "SD_TD", "TD_GD"], default="original", help="Computation strategy for analysis")
-    parser.add_argument("--ref_first", action="store_true", default=False, help="Use first row/column as reference for spatial difference")
-    parser.add_argument("--bit_th", type=int, default=4, help="Bit threshold for large numbers computation")
-    parser.add_argument("--clamp", action="store_true", default=False, help="Clamp input activations into int8")
-    parser.add_argument("--analysis", type=str, choices=["bitwidth", "similarity", "shape"], default=None, help="Choose from: bitwidth, similarity, shape")
-    parser.add_argument("--similarity-types", type=str, choices=["spatial", "temporal", "conditional"], default=None, help="Types of similarity analysis to perform")    
-    parser.add_argument("--sample", action="store_true", default=False, help="generate samples")    
-    parser.add_argument("--bitslice-method", type=str, choices=["bada", "naive", "sibia", "none"], default="none", help="Bitslice method")
-    parser.add_argument("--bitslice-bits", type=int, default=9, help="Bitwidth for bitslice method")
-    parser.add_argument("--bitslice-width", type=int, default=3, help="Width of each bitslice")
-    parser.add_argument("--bitslice-keep-overflow", action="store_true", default=False, help="Keep overflow slice in bitslice method")
-    parser.add_argument("--bitslice-clamp", action="store_true", default=False, help="Clamp reconstructed bitslice value to be not overflow")
-    parser.add_argument("--scheme", type=int, default=2, help="hardware optimizatin scheme")
-    parser.add_argument("--path-reverse", action="store_true", default=False, help="(uncond, cond)=(method1, method2) by default, path_reverse to conduct (uncond, cond)=(method2, method1)")
-    parser.add_argument("--save-tile", action="store_true", default=False, help="Save tile patterns")
-    parser.add_argument("--performance", action="store_true", default=False, help="Performance analysis rather than bitslice analysis")
-    ##################################################
+    ############## new ###############
+    parser.add_argument("--original", action="store_true", help="use direct computing")
+    parser.add_argument("--SD", action="store_true", help="use spatial differential computing")
+    parser.add_argument("--TD", action="store_true", help="use temporal differential computing")
+    parser.add_argument("--CUD", action="store_true", help="use conditional & unconditional differential computing")
+    parser.add_argument("--quant_info", action="store_true", help="analyze quantization paramaters")
+    ##################################
     args = parser.parse_args()
     main(args)

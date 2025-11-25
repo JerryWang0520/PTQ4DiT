@@ -8,8 +8,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 class OriginalComputation(ComputationStrategy):
-    def __init__(self, clamp=False, bitslice_strategy=None, save=False):
-        super().__init__(clamp, bitslice_strategy, save)
+    def __init__(self, clamp=False, bitslice_strategy=None, save=False, path_reverse=False):
+        super().__init__(clamp, bitslice_strategy, save, path_reverse)
 
     def compute(self, module, input, output, name) -> torch.Tensor:
         params = self._get_quantization_params(module, input)
@@ -32,12 +32,16 @@ class OriginalComputation(ComputationStrategy):
         xw_raw = self.get_Raw_output(module, name, xw_delta, xw_q.shape)
 
         self.tensors = {
-            "act": x_delta,
+            # "act": x_delta,
+            "act": x_delta[0],
             "output": xw_delta,
+            "layer_size": {"M": x_delta.shape[1], "K": x_delta.shape[2], "N": xw_delta.shape[2]},
         }
 
         if self.save:
             self.save_tensors = {
+                #! For GBUF tests, just save original tensors here.
+                #! Because different strategies can be done by selecting different target/reference in HW.
                 # "x_q"   : params["x_q" ],       # uint8: 0~255
                 # "w_q"   : params["w_q" ].t(),   # uint8: 0~255
                 # "x_zp"  : params["x_zp"],       # uint8: 0~255
@@ -56,8 +60,8 @@ class OriginalComputation(ComputationStrategy):
 
 
 class SpatialDifferenceComputation(ComputationStrategy):
-    def __init__(self, clamp=False, bitslice_strategy=None, ref_first: bool = False, save=False):
-        super().__init__(clamp, bitslice_strategy, save)
+    def __init__(self, clamp=False, bitslice_strategy=None, ref_first: bool = False, save=False, path_reverse=False):
+        super().__init__(clamp, bitslice_strategy, save, path_reverse)
         self.ref_first = ref_first
         logger.info(f"ref_first: {self.ref_first}")
 
@@ -83,7 +87,8 @@ class SpatialDifferenceComputation(ComputationStrategy):
 
         self.tensors = {
             "act": x_delta,
-            "output": xw_delta
+            "output": xw_delta,
+            "layer_size": {"M": x_delta.shape[1], "K": x_delta.shape[2], "N": xw_delta.shape[2]},
         }
 
         if self.save:
@@ -99,8 +104,8 @@ class SpatialDifferenceComputation(ComputationStrategy):
 
 
 class TemporalDifferenceComputation(ComputationStrategy):
-    def __init__(self, clamp=False, bitslice_strategy=None, save=False):
-        super().__init__(clamp, bitslice_strategy, save)
+    def __init__(self, clamp=False, bitslice_strategy=None, save=False, path_reverse=False):
+        super().__init__(clamp, bitslice_strategy, save, path_reverse)
 
     def compute(self, module, input, output, name) -> torch.Tensor:
         params = self._get_quantization_params(module, input)
@@ -140,7 +145,8 @@ class TemporalDifferenceComputation(ComputationStrategy):
 
         self.tensors = {
             "act": x_delta,
-            "output": xw_delta
+            "output": xw_delta,
+            "layer_size": {"M": x_delta.shape[1], "K": x_delta.shape[2], "N": xw_delta.shape[2]},
         }
 
         if self.save:
@@ -156,8 +162,8 @@ class TemporalDifferenceComputation(ComputationStrategy):
 
 
 class CFGDifferenceComputation(ComputationStrategy):
-    def __init__(self, clamp=False, bitslice_strategy=None, save=False):
-        super().__init__(clamp, bitslice_strategy, save)
+    def __init__(self, clamp=False, bitslice_strategy=None, save=False, path_reverse=False):
+        super().__init__(clamp, bitslice_strategy, save, path_reverse)
 
     def compute(self, module, input, output, name) -> torch.Tensor:
         params = self._get_quantization_params(module, input)
@@ -191,8 +197,10 @@ class CFGDifferenceComputation(ComputationStrategy):
         xw_raw = torch.stack([xw_cond, xw_uncond], dim=0)
 
         self.tensors = {
-            "act": tensor_in,
-            "output": tensor_out
+            # "act": tensor_in,
+            "act": tensor_in[0],
+            "output": tensor_out,
+            "layer_size": {"M": tensor_in.shape[1], "K": tensor_in.shape[2], "N": tensor_out.shape[2]},
         }
 
         if self.save:
@@ -208,8 +216,8 @@ class CFGDifferenceComputation(ComputationStrategy):
 
 
 class SpatialCFGDifferenceComputation(ComputationStrategy):
-    def __init__(self, clamp=False, bitslice_strategy=None, ref_first: bool = False, save=False):
-        super().__init__(clamp, bitslice_strategy, save)
+    def __init__(self, clamp=False, bitslice_strategy=None, ref_first: bool = False, save=False, path_reverse=False):
+        super().__init__(clamp, bitslice_strategy, save, path_reverse)
         self.ref_first = ref_first
         logger.info(f"ref_first: {self.ref_first}")
     
@@ -246,7 +254,8 @@ class SpatialCFGDifferenceComputation(ComputationStrategy):
 
         self.tensors = {
             "act": tensor_in,
-            "output": tensor_out
+            "output": tensor_out,
+            "layer_size": {"M": tensor_in.shape[1], "K": tensor_in.shape[2], "N": tensor_out.shape[2]},
         }
 
         if self.save:
@@ -331,7 +340,8 @@ class LargeNumbersCFGDifferenceComputation(ComputationStrategy):
 
         self.tensors = {
             "act": tensor_in,
-            "output": tensor_out
+            "output": tensor_out,
+            "layer_size": {"M": tensor_in.shape[1], "K": tensor_in.shape[2], "N": tensor_out.shape[2]},
         }
 
         if self.should_assert:
@@ -426,7 +436,8 @@ class OptimalCFGDifferenceComputation(ComputationStrategy):
 
         self.tensors = {
             "act": tensor_in,
-            "output": tensor_out
+            "output": tensor_out,
+            "layer_size": {"M": tensor_in.shape[1], "K": tensor_in.shape[2], "N": tensor_out.shape[2]},
         }
 
         if self.should_assert:
@@ -523,7 +534,8 @@ class SpatialOptimalCFGDifferenceComputation(ComputationStrategy):
 
         self.tensors = {
             "act": tensor_in,
-            "output": tensor_out
+            "output": tensor_out,
+            "layer_size": {"M": tensor_in.shape[1], "K": tensor_in.shape[2], "N": tensor_out.shape[2]},
         }
 
         if self.should_assert:
@@ -532,8 +544,8 @@ class SpatialOptimalCFGDifferenceComputation(ComputationStrategy):
 
 
 class Raw_SD_Computation(ComputationStrategy):
-    def __init__(self, clamp=False, bitslice_strategy=None, ref_first: bool = False, save=False):
-        super().__init__(clamp, bitslice_strategy, save)
+    def __init__(self, clamp=False, bitslice_strategy=None, ref_first: bool = False, save=False, path_reverse=False):
+        super().__init__(clamp, bitslice_strategy, save, path_reverse)
         self.ref_first = ref_first
         logger.info(f"ref_first: {self.ref_first}")
 
@@ -570,9 +582,11 @@ class Raw_SD_Computation(ComputationStrategy):
         xw_raw = torch.stack([xw_cond, xw_uncond], dim=0)
 
         self.tensors = {
-            "act": tensor_in,
+            # "act": tensor_in,
+            "act": tensor_in[0],
             # "act": tensor_in_reconstructed,
-            "output": tensor_out
+            "output": tensor_out,
+            "layer_size": {"M": tensor_in.shape[1], "K": tensor_in.shape[2], "N": tensor_out.shape[2]},
         }
 
         if self.save:
@@ -588,8 +602,8 @@ class Raw_SD_Computation(ComputationStrategy):
 
 
 class Raw_TD_Computation(ComputationStrategy):
-    def __init__(self, clamp=False, bitslice_strategy=None, save=False):
-        super().__init__(clamp, bitslice_strategy, save)
+    def __init__(self, clamp=False, bitslice_strategy=None, save=False, path_reverse=False):
+        super().__init__(clamp, bitslice_strategy, save, path_reverse)
         
     def compute(self, module, input, output, name) -> torch.Tensor:
         params = self._get_quantization_params(module, input)
@@ -647,8 +661,10 @@ class Raw_TD_Computation(ComputationStrategy):
         module.out_prev = xw_cond
 
         self.tensors = {
-            "act": tensor_in,
-            "output": tensor_out
+            # "act": tensor_in,
+            "act": tensor_in[0],
+            "output": tensor_out,
+            "layer_size": {"M": tensor_in.shape[1], "K": tensor_in.shape[2], "N": tensor_out.shape[2]},
         }
 
         if self.save:
@@ -664,8 +680,8 @@ class Raw_TD_Computation(ComputationStrategy):
 
 
 class SD_TD_Computation(ComputationStrategy):
-    def __init__(self, clamp=False, bitslice_strategy=None, ref_first: bool = False, save=False):
-        super().__init__(clamp, bitslice_strategy, save)
+    def __init__(self, clamp=False, bitslice_strategy=None, ref_first: bool = False, save=False, path_reverse=False):
+        super().__init__(clamp, bitslice_strategy, save, path_reverse)
         self.ref_first = ref_first
         logger.info(f"ref_first: {self.ref_first}")
 
@@ -726,7 +742,86 @@ class SD_TD_Computation(ComputationStrategy):
 
         self.tensors = {
             "act": tensor_in,
-            "output": tensor_out
+            "output": tensor_out,
+            "layer_size": {"M": tensor_in.shape[1], "K": tensor_in.shape[2], "N": tensor_out.shape[2]},
+        }
+
+        if self.save:
+            self.save_tensors = {
+                "x_raw" : tensor_in,            # int9: -256~255
+                "w_raw" : w_raw.t(),            # int9: -256~255
+                "xw_raw": tensor_out,           # int24
+            }
+        
+        if self.should_assert:
+            assert torch.equal(xw_raw, xw_q), f"xw_raw != xw_q in {name}: max diff = {torch.max(torch.abs(xw_raw - xw_q))}"
+        return self._output_rescaling(module, xw_raw, params['x_scale'], params['w_scale'])
+
+
+class TD_GD_Computation(ComputationStrategy):
+    def __init__(self, clamp=False, bitslice_strategy=None, save=False, path_reverse=False):
+        super().__init__(clamp, bitslice_strategy, save, path_reverse)
+
+    def compute(self, module, input, output, name) -> torch.Tensor:
+        params = self._get_quantization_params(module, input)
+
+        # 0. Golden Output
+        x_cond     = params['x_q'][0] - params['x_zp']
+        x_uncond   = params['x_q'][1] - params['x_zp']
+        _x_cond    = params['x_q'][0] - params['x_zp']
+        _x_uncond  = params['x_q'][1] - params['x_zp']
+        w_raw      = params['w_q']    - params['w_zp']
+
+        xw_cond_q   = module.fwd_func(x_cond  , w_raw, **module.fwd_kwargs)
+        xw_uncond_q = module.fwd_func(x_uncond, w_raw, **module.fwd_kwargs)
+        xw_q = torch.stack([xw_cond_q, xw_uncond_q], dim=0)
+
+        if hasattr(module, 'in_prev'):      # 2nd~ step
+            # 1. Prepare Input Data
+            x_cond   = self.get_CUD_input(module, name, x_cond  , x_uncond)
+            x_uncond = self.get_TD_input (module, name, x_uncond, module.in_prev)
+            tensor_in = torch.stack([x_cond, x_uncond], dim=0)
+
+            # 2. Apply bitslice reconstruction
+            x_cond_reconstructed   = self.apply_bitslice_reconstruction(x_cond)
+            x_uncond_reconstructed = self.apply_bitslice_reconstruction(x_uncond)
+            
+            # 3. Computation
+            xw_cond   = self.fwd_func(module, name, x_cond_reconstructed  , w_raw)
+            xw_uncond = self.fwd_func(module, name, x_uncond_reconstructed, w_raw)
+            tensor_out = torch.stack([xw_cond, xw_uncond], dim=0)
+
+            # 4. Output Recovery
+            xw_uncond = self.get_TD_output (module, name, xw_uncond, module.out_prev, xw_uncond_q.shape)
+            xw_cond   = self.get_CUD_output(module, name, xw_cond  , xw_uncond, xw_cond_q.shape  )
+            xw_raw = torch.stack([xw_cond, xw_uncond], dim=0)
+        else:                               # 1st step
+            # 1. Prepare Input Data
+            x_cond   = self.get_CUD_input(module, name, x_cond, x_uncond)
+            x_uncond = self.get_Raw_input(module, name, x_uncond)
+            tensor_in = torch.stack([x_cond, x_uncond], dim=0)
+
+            # 2. Apply bitslice reconstruction
+            x_cond_reconstructed   = self.apply_bitslice_reconstruction(x_cond)
+            x_uncond_reconstructed = self.apply_bitslice_reconstruction(x_uncond)
+            
+            # 3. Computation
+            xw_cond   = self.fwd_func(module, name, x_cond_reconstructed  , w_raw)
+            xw_uncond = self.fwd_func(module, name, x_uncond_reconstructed, w_raw)
+            tensor_out = torch.stack([xw_cond, xw_uncond], dim=0)
+            
+            # 4. Output Recovery
+            xw_uncond = self.get_Raw_output(module, name, xw_uncond, xw_uncond_q.shape)
+            xw_cond   = self.get_CUD_output(module, name, xw_cond  , xw_uncond, xw_cond_q.shape)
+            xw_raw = torch.stack([xw_cond, xw_uncond], dim=0)
+        
+        module.in_prev  = _x_uncond
+        module.out_prev = xw_uncond
+
+        self.tensors = {
+            "act": tensor_in,
+            "output": tensor_out,
+            "layer_size": {"M": tensor_in.shape[1], "K": tensor_in.shape[2], "N": tensor_out.shape[2]},
         }
 
         if self.save:
@@ -751,7 +846,15 @@ def create_strategy(strategy_type: str, bitslice_method=None, bitslice_kwargs=No
     # Add to analysis manager if provided
     if analysis_manager and bitslice_strategy:
         from analyses.bitslice_analyzer import BitsliceAnalyzer
-        bitslice_analyzer = BitsliceAnalyzer(bitslice_strategy)
+        bitslice_analyzer = BitsliceAnalyzer(bitslice_strategy, kwargs.get('scheme', 2), kwargs.get('performance', False))
+        
+        if bitslice_analyzer.performance:
+            bitslice_analyzer.analyze      = lambda *args, **kwargs: {}
+            bitslice_analyzer.save_results = lambda *args, **kwargs: None
+        else:
+            bitslice_analyzer.analyze_performance     = lambda *args, **kwargs: {}
+            bitslice_analyzer.save_performance_result = lambda *args, **kwargs: None
+
         analysis_manager.add_analyzer("bitslice", bitslice_analyzer)
 
     strategies = {
@@ -766,6 +869,7 @@ def create_strategy(strategy_type: str, bitslice_method=None, bitslice_kwargs=No
         'Raw_SD': Raw_SD_Computation,
         'Raw_TD': Raw_TD_Computation,
         'SD_TD': SD_TD_Computation,
+        'TD_GD': TD_GD_Computation,
     }
     
     if strategy_type not in strategies:
@@ -776,21 +880,23 @@ def create_strategy(strategy_type: str, bitslice_method=None, bitslice_kwargs=No
 
     # Define parameter mappings for each strategy
     strategy_params = {
-        'original'       : ['clamp',                        'save'],
-        'spatial'        : ['clamp', 'ref_first',           'save'],
-        'temporal'       : ['clamp',                        'save'],
-        'cfg'            : ['clamp',                        'save'],
-        'spatial_cfg'    : ['clamp', 'ref_first',           'save'],
-        'cfg_large'      : ['clamp',              'bit_th'        ],
-        'cfg_opt'        : ['clamp',              'bit_th'        ],
-        'spatial_cfg_opt': ['clamp', 'ref_first', 'bit_th'        ],
-        'Raw_SD'         : ['clamp', 'ref_first',           'save'],
-        'Raw_TD'         : ['clamp',                        'save'],
-        'SD_TD'          : ['clamp', 'ref_first',           'save'],
+        'original'       : ['clamp',                        'save', 'path_reverse'],
+        'spatial'        : ['clamp', 'ref_first',           'save', 'path_reverse'],
+        'temporal'       : ['clamp',                        'save', 'path_reverse'],
+        'cfg'            : ['clamp',                        'save', 'path_reverse'],
+        'spatial_cfg'    : ['clamp', 'ref_first',           'save', 'path_reverse'],
+        'cfg_large'      : ['clamp',              'bit_th'                        ],
+        'cfg_opt'        : ['clamp',              'bit_th'                        ],
+        'spatial_cfg_opt': ['clamp', 'ref_first', 'bit_th'                        ],
+        'Raw_SD'         : ['clamp', 'ref_first',           'save', 'path_reverse'],
+        'Raw_TD'         : ['clamp',                        'save', 'path_reverse'],
+        'SD_TD'          : ['clamp', 'ref_first',           'save', 'path_reverse'],
+        'TD_GD'          : ['clamp',                        'save', 'path_reverse'],
     }
 
     # Get allowed parameters for this strategy (default to just 'clamp')
     allowed_params = strategy_params.get(strategy_type, ['clamp'])
     filtered_kwargs = {k: v for k, v in kwargs.items() if k in allowed_params}
     return strategy_class(bitslice_strategy=bitslice_strategy, **filtered_kwargs)
+
 

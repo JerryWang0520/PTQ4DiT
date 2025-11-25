@@ -1,0 +1,1 @@
+../../q-diffusion/scripts/txt2img.py

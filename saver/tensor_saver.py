@@ -56,27 +56,28 @@ class TensorSaver:
         return tiles
     
     def save_global_tiles(self, tensors_dict, name, step):
-        if not self.enabled or not (step == 2 or step == 50):
+        if not self.enabled or not (2 == step):
+        # if not self.enabled or not (2 <= step <= 50):
             return
         
         save_dir = self.save_dir or "./output/patterns"
         dir_name = self._get_dir_name(name, step)        
         base_dir = os.path.join(save_dir, "active", dir_name)
         os.makedirs(base_dir, exist_ok=True)
-
+        
         # Save zero points (unchanged)
         self._save_zero_points(tensors_dict, base_dir)
         
         # Save input tensors with configurable tiling
         if "x_q" in tensors_dict:
-            self._save_input_tensors(tensors_dict["x_q"], base_dir, "act", signed=False, bits=8)
+            self._save_input_tensors(tensors_dict["x_q"], base_dir, "x_q", signed=False, bits=8)
             
         if "x_raw" in tensors_dict:
             self._save_input_tensors(tensors_dict["x_raw"], base_dir, "x_raw", signed=True, bits=9)
             
         # Save weight tensors with configurable tiling  
         if "w_q" in tensors_dict:
-            self._save_weight_tensors(tensors_dict["w_q"], base_dir, "wgt", signed=False, bits=8)
+            self._save_weight_tensors(tensors_dict["w_q"], base_dir, "w_q", signed=False, bits=8)
             
         if "w_raw" in tensors_dict:
             self._save_weight_tensors(tensors_dict["w_raw"], base_dir, "w_raw", signed=True, bits=9)
@@ -86,7 +87,7 @@ class TensorSaver:
             self._save_output_tensors(tensors_dict["xw_raw"], base_dir, "out", signed=True, bits=24)
         
         print(f"Saved tensors in memory layout to {base_dir}")
-
+    
     def _save_input_tensors(self, tensor, base_dir, prefix, signed=False, bits=8):
         tile_size = self._get_global_tile_configs('input')
         
@@ -95,9 +96,15 @@ class TensorSaver:
         
         tiles0 = self._generate_tiles(tensor0, tile_size)
         tiles1 = self._generate_tiles(tensor1, tile_size)
-        
+       
         for tile_info0, tile_info1 in zip(tiles0, tiles1):
             m_idx, k_idx = tile_info0['indices']
+           
+            # only save the first tile
+            if m_idx != 0:
+            # if m_idx != 0 or k_idx != 0:
+                continue
+            
             tile_dir = os.path.join(base_dir, f"{prefix}_m{m_idx:02d}_k{k_idx:02d}")
             os.makedirs(tile_dir, exist_ok=True)
             
@@ -110,7 +117,6 @@ class TensorSaver:
                 self.global_tile_m00_k00_n00["input1"] = tile_info1['tile']
 
     def _save_weight_tensors(self, tensor, base_dir, prefix, signed=False, bits=8):
-        """Save weight tensors with configurable tiling"""
         tile_size = self._get_global_tile_configs('weight')
         tensor = tensor.cpu().numpy()
         
@@ -118,6 +124,12 @@ class TensorSaver:
         
         for tile_info in tiles:
             k_idx, n_idx = tile_info['indices']
+
+            # only save the first tile
+            if n_idx != 0:
+            # if k_idx != 0 or n_idx != 0:
+                continue
+            
             tile_dir = os.path.join(base_dir, f"{prefix}_k{k_idx:02d}_n{n_idx:02d}")
             os.makedirs(tile_dir, exist_ok=True)
             
@@ -138,6 +150,11 @@ class TensorSaver:
         
         for tile_info0, tile_info1 in zip(tiles0, tiles1):
             m_idx, n_idx = tile_info0['indices']
+
+            # only save the first tile
+            if m_idx != 0 or n_idx != 0:
+                continue
+            
             tile_dir = os.path.join(base_dir, f"{prefix}_m{m_idx:02d}_n{n_idx:02d}")
             os.makedirs(tile_dir, exist_ok=True)
             
@@ -171,7 +188,8 @@ class TensorSaver:
     
 
     def save_local_tiles(self, name, step):
-        if not self.enabled or not (step == 2 or step == 50):
+        if not self.enabled or not (2 == step):
+        # if not self.enabled or not (2 <= step <= 50):     #!
             return
         
         if not hasattr(self, 'global_tile_m00_k00_n00') or not self.global_tile_m00_k00_n00:
@@ -258,247 +276,6 @@ class TensorSaver:
         self._save_output_matrix_global(global_psum1, global_dir, "gobuf", bank_offset=4, signed=True, bits=24)
 
         print(f"Saved local tiles to {base_dir}")
-
-
-    # def save_tensors(self, tensors_dict, name, step):
-    #     if not self.enabled:
-    #         return
-            
-    #     save_dir = os.path.join(self.save_dir, "tensor_data", name)
-    #     os.makedirs(save_dir, exist_ok=True)
-        
-    #     filename = f"step_{step}.npz"
-    #     filepath = os.path.join(save_dir, filename)
-        
-    #     save_data = {}
-    #     for key, tensor in tensors_dict.items():
-    #         save_data[key] = tensor.detach().cpu().numpy()
-        
-    #     np.savez_compressed(filepath, **save_data)
-
-
-    # def save_global_tiles(self, tensors_dict, name, step):
-    #     if not self.enabled or step != 2 or step != 50:
-    #         return
-        
-    #     save_dir = self.save_dir or "./output/patterns"
-    #     dir_name = self._get_dir_name(name, step)        
-    #     base_dir = os.path.join(save_dir, "active", dir_name)
-    #     os.makedirs(base_dir, exist_ok=True)
-
-    #     if "x_zp" in tensors_dict:
-    #         zp_dir = os.path.join(base_dir, "zero_points")
-    #         os.makedirs(zp_dir, exist_ok=True)
-            
-    #         x_zp = tensors_dict["x_zp"].cpu().numpy().flatten()
-            
-    #         with open(os.path.join(zp_dir, "x_zp.txt"), "w") as f:
-    #             for val in x_zp:
-    #                 f.write(self.uint_to_bin(val, 8) + "\n")
-        
-    #     if "w_zp" in tensors_dict:
-    #         zp_dir = os.path.join(base_dir, "zero_points")
-    #         os.makedirs(zp_dir, exist_ok=True)
-            
-    #         w_zp = tensors_dict["w_zp"].cpu().numpy().flatten()
-
-    #         if len(w_zp) % 256 != 0:
-    #             pad_size = 256 - len(w_zp) % 256
-    #             w_zp = np.pad(w_zp, (0, pad_size))
-
-    #         with open(os.path.join(zp_dir, "w_zp.txt"), "w") as f:
-    #             for val in w_zp:
-    #                 f.write(self.uint_to_bin(val, 8) + "\n")
-
-    #     if "x_q" in tensors_dict:
-    #         act_tensor = tensors_dict["x_q"]
-    #         batch0 = act_tensor[0].cpu().numpy()
-    #         batch1 = act_tensor[1].cpu().numpy()
-
-    #         for m_idx in range(0, 256, 128):
-    #             for k_idx in range(0, 4608, 256):
-    #                 m_end = min(m_idx + 128, 256)
-    #                 k_end = min(k_idx + 256, 4608)
-
-    #                 tile0 = batch0[m_idx:m_end, k_idx:k_end]
-    #                 tile1 = batch1[m_idx:m_end, k_idx:k_end]
-
-    #                 if tile0.shape != (128, 256):
-    #                     pad_h = 128 - tile0.shape[0]
-    #                     pad_w = 256 - tile0.shape[1]
-    #                     tile0 = np.pad(tile0, ((0, pad_h), (0, pad_w)))
-    #                     tile1 = np.pad(tile1, ((0, pad_h), (0, pad_w)))
-
-    #                 tile_dir = os.path.join(base_dir, f"act_m{m_idx//128:02d}_k{k_idx//256:02d}")
-    #                 self._save_input_matrix_global(tile0, tile_dir, "gibuf0", signed=False, bits=8)
-    #                 self._save_input_matrix_global(tile1, tile_dir, "gibuf1", signed=False, bits=8)
-       
-    #     if "w_q" in tensors_dict:
-    #         wgt_tensor = tensors_dict["w_q"].cpu().numpy()
-            
-    #         for k_idx in range(0, 4608, 256):
-    #             for n_idx in range(0, 1152, 256):
-    #                 k_end = min(k_idx + 256, 4608)
-    #                 n_end = min(n_idx + 256, 1152)
-                    
-    #                 tile = wgt_tensor[k_idx:k_end, n_idx:n_end]
-                    
-    #                 if tile.shape != (256, 256):
-    #                     pad_h = 256 - tile.shape[0]
-    #                     pad_w = 256 - tile.shape[1]
-    #                     tile = np.pad(tile, ((0, pad_h), (0, pad_w)))
-                    
-    #                 tile_dir = os.path.join(base_dir, f"wgt_k{k_idx//256:02d}_n{n_idx//256:02d}")
-    #                 self._save_weight_matrix_global(tile, tile_dir, "gwbuf", signed=False, bits=8)
-        
-    #     if "x_raw" in tensors_dict:
-    #         act_tensor = tensors_dict["x_raw"]
-    #         batch0 = act_tensor[0].cpu().numpy()
-    #         batch1 = act_tensor[1].cpu().numpy()
-
-    #         for m_idx in range(0, 256, 128):
-    #             for k_idx in range(0, 4608, 256):
-    #                 m_end = min(m_idx + 128, 256)
-    #                 k_end = min(k_idx + 256, 4608)
-
-    #                 tile0 = batch0[m_idx:m_end, k_idx:k_end]
-    #                 tile1 = batch1[m_idx:m_end, k_idx:k_end]
-
-    #                 if tile0.shape != (128, 256):
-    #                     pad_h = 128 - tile0.shape[0]
-    #                     pad_w = 256 - tile0.shape[1]
-    #                     tile0 = np.pad(tile0, ((0, pad_h), (0, pad_w)))
-    #                     tile1 = np.pad(tile1, ((0, pad_h), (0, pad_w)))
-
-    #                 tile_dir = os.path.join(base_dir, f"x_raw_m{m_idx//128:02d}_k{k_idx//256:02d}")
-    #                 self._save_input_matrix_global(tile0, tile_dir, "gibuf0", signed=True, bits=9)
-    #                 self._save_input_matrix_global(tile1, tile_dir, "gibuf1", signed=True, bits=9)
-        
-    #                 if m_idx == 0 and k_idx == 0:
-    #                     self.global_tile_m00_k00_n00["input0"] = tile0
-    #                     self.global_tile_m00_k00_n00["input1"] = tile1
-
-    #     if "w_raw" in tensors_dict:
-    #         wgt_tensor = tensors_dict["w_raw"].cpu().numpy()
-            
-    #         for k_idx in range(0, 4608, 256):
-    #             for n_idx in range(0, 1152, 256):
-    #                 k_end = min(k_idx + 256, 4608)
-    #                 n_end = min(n_idx + 256, 1152)
-                    
-    #                 tile = wgt_tensor[k_idx:k_end, n_idx:n_end]
-                    
-    #                 if tile.shape != (256, 256):
-    #                     pad_h = 256 - tile.shape[0]
-    #                     pad_w = 256 - tile.shape[1]
-    #                     tile = np.pad(tile, ((0, pad_h), (0, pad_w)))
-                    
-    #                 tile_dir = os.path.join(base_dir, f"w_raw_k{k_idx//256:02d}_n{n_idx//256:02d}")
-    #                 self._save_weight_matrix_global(tile, tile_dir, "gwbuf", signed=True, bits=9)
-
-    #                 if k_idx == 0 and n_idx == 0:
-    #                     self.global_tile_m00_k00_n00["weight"] = tile
-        
-    #     if "xw_raw" in tensors_dict:
-    #         out_tensor = tensors_dict["xw_raw"]
-    #         batch0 = out_tensor[0].cpu().numpy()
-    #         batch1 = out_tensor[1].cpu().numpy()
-            
-    #         for m_idx in range(0, 256, 128):
-    #             for n_idx in range(0, 1152, 256):
-    #                 m_end = min(m_idx + 128, 256)
-    #                 n_end = min(n_idx + 256, 1152)
-                    
-    #                 tile0 = batch0[m_idx:m_end, n_idx:n_end]
-    #                 tile1 = batch1[m_idx:m_end, n_idx:n_end]
-                    
-    #                 if tile0.shape != (128, 256):
-    #                     pad_h = 128 - tile0.shape[0]
-    #                     pad_w = 256 - tile0.shape[1]
-    #                     tile0 = np.pad(tile0, ((0, pad_h), (0, pad_w)))
-    #                     tile1 = np.pad(tile1, ((0, pad_h), (0, pad_w)))
-                    
-    #                 tile_dir = os.path.join(base_dir, f"out_m{m_idx//128:02d}_n{n_idx//256:02d}")
-    #                 self._save_output_matrix_global(tile0, tile_dir, "gobuf", bank_offset=0, signed=True, bits=24)
-    #                 self._save_output_matrix_global(tile1, tile_dir, "gobuf", bank_offset=4, signed=True, bits=24)
-        
-    #     print(f"Saved tensors in memory layout to {base_dir}")
-
-    # def save_local_tiles(self, name, step):
-    #     if not self.enabled or step != 2 or step != 50:
-    #         return
-        
-    #     if not hasattr(self, 'global_tile_m00_k00_n00') or not self.global_tile_m00_k00_n00:
-    #         print("No global tiles saved for local extraction")
-    #         return
-        
-    #     save_dir = self.save_dir or "./output/patterns"        
-    #     dir_name = self._get_dir_name(name, step)
-    #     base_dir = os.path.join(save_dir, "active", dir_name)
-        
-    #     input0 = self.global_tile_m00_k00_n00.get("input0")
-    #     input1 = self.global_tile_m00_k00_n00.get("input1") 
-    #     weight = self.global_tile_m00_k00_n00.get("weight")
-        
-    #     if input0 is None or input1 is None or weight is None:
-    #         print("Missing required global tiles for local extraction")
-    #         return
-        
-    #     for m_idx in range(16):
-    #         for k_idx in range(8):
-    #             input_tile0 = self._extract_tile(input0, m_idx, k_idx, tile_size=(8, 32))
-    #             input_tile1 = self._extract_tile(input1, m_idx, k_idx, tile_size=(8, 32))
-                
-    #             local_dir = os.path.join(base_dir, "x_raw_m00_k00", f"local_m{m_idx:02d}_k{k_idx:02d}")
-    #             self._save_input_matrix_local(input_tile0, local_dir, "libuf0", signed=True, bits=9)
-    #             self._save_input_matrix_local(input_tile1, local_dir, "libuf1", signed=True, bits=9)
-        
-    #     for k_idx in range(8):
-    #         for n_idx in range(16):
-    #             weight_tile = self._extract_tile(weight, k_idx, n_idx, tile_size=(32, 16))
-                
-    #             local_dir = os.path.join(base_dir, "w_raw_k00_n00", f"local_k{k_idx:02d}_n{n_idx:02d}")
-    #             self._save_weight_matrix_local(weight_tile, local_dir, "lwbuf", signed=True, bits=9)
-        
-    #     global_psum0 = np.zeros((128, 256))
-    #     global_psum1 = np.zeros((128, 256))
-
-    #     for m_idx in range(16):
-    #         for n_idx in range(16):
-    #             output_tile0 = np.zeros((8, 16))
-    #             output_tile1 = np.zeros((8, 16))
-                
-    #             for k_idx in range(8):
-    #                 input_tile0 = self._extract_tile(input0, m_idx, k_idx, tile_size=(8, 32))
-    #                 input_tile1 = self._extract_tile(input1, m_idx, k_idx, tile_size=(8, 32))
-    #                 weight_tile = self._extract_tile(weight, k_idx, n_idx, tile_size=(32, 16))
-                    
-    #                 output_tile0 += np.matmul(input_tile0, weight_tile)
-    #                 output_tile1 += np.matmul(input_tile1, weight_tile)
-                
-    #             m_start, m_end = m_idx * 8, (m_idx + 1) * 8
-    #             n_start, n_end = n_idx * 16, (n_idx + 1) * 16
-    #             global_psum0[m_start:m_end, n_start:n_end] = output_tile0
-    #             global_psum1[m_start:m_end, n_start:n_end] = output_tile1
-
-    #             local_dir = os.path.join(base_dir, "out_m00_n00_k00", f"local_m{m_idx:02d}_n{n_idx:02d}")
-    #             self._save_output_matrix_local(output_tile0, local_dir, "lobuf0", signed=True, bits=24)
-    #             self._save_output_matrix_local(output_tile1, local_dir, "lobuf1", signed=True, bits=24)
-        
-    #     global_dir = os.path.join(base_dir, "out_m00_n00_k00")
-    #     self._save_output_matrix_global(global_psum0, global_dir, "gobuf", bank_offset=0, signed=True, bits=24)
-    #     self._save_output_matrix_global(global_psum1, global_dir, "gobuf", bank_offset=4, signed=True, bits=24)
-
-    #     print(f"Saved local tiles to {base_dir}")
-
-    # def _extract_tile(self, matrix, tile_row_idx, tile_col_idx, tile_size):
-    #     tile_height, tile_width = tile_size
-    #     tile_row_start = tile_row_idx * tile_height
-    #     tile_row_end   = tile_row_start + tile_height
-    #     tile_col_start = tile_col_idx * tile_width  
-    #     tile_col_end   = tile_col_start + tile_width
-        
-    #     return matrix[tile_row_start:tile_row_end, tile_col_start:tile_col_end]
 
     def int_to_bin(self, val, bits):
         min_val = -(1 << (bits - 1))
@@ -681,3 +458,99 @@ class TensorSaver:
         
         else:
             return f"t{step:02d}_{name.replace('.', '_')}"
+
+
+def main():
+    import torch
+    
+    torch.manual_seed(42)
+
+    # Create test data
+    batch_size = 2
+    in_features = 256 * 2
+    out_features = 256
+    
+    # Generate random int8 input and weight
+    def gaussian_uint8(shape, mean=128.0, std=5.0):
+        x = torch.randn(shape) * std + mean
+        x = x.clamp(0, 255).round().to(torch.uint8)
+        return x
+    x_q = gaussian_uint8(shape=(batch_size, 128, in_features), mean=128, std=5)
+    w_q = gaussian_uint8(shape=(out_features, in_features), mean=128, std=5)
+    print(f"x_q.shape:{x_q.shape}")
+    print(f"w_q.shape:{w_q.shape}")
+    
+    # Generate zero points
+    x_zp = torch.randint(100, 150, (1,), dtype=torch.uint8)             # tensor-wise
+    w_zp = torch.randint(100, 150, (out_features,), dtype=torch.uint8)  # channel-wise
+    
+    # Compute raw values (int9 range: -256~255)
+    x_raw = x_q.to(torch.int16) - x_zp.to(torch.int16)
+    w_raw = w_q.to(torch.int16) - w_zp.unsqueeze(1).to(torch.int16)
+    print(f"x_raw.shape:{x_raw.shape}")
+    print(f"w_raw.shape:{w_raw.shape}")
+    
+    # Compute matmul (int24)
+    xw_raw = torch.matmul(x_raw.float(), w_raw.t().float()).to(torch.int32)
+       
+    # Prepare tensors to save
+    tensors_to_save = {
+        "x_q": x_q,
+        "w_q": w_q.t(),
+        "x_zp": x_zp,
+        "w_zp": w_zp.t(),
+        "x_raw": x_raw,
+        "w_raw": w_raw.t(),
+        "xw_raw": xw_raw,
+    }
+    
+    # Initialize saver
+    saver = TensorSaver(enabled=True, save_dir="./output/patterns/test")
+    
+    # Save global tiles
+    layer_name = "test_fc2"
+    step = 2
+    saver.save_global_tiles(tensors_to_save, layer_name, step)
+    saver.save_local_tiles(layer_name, step)
+    
+    print(f"x_raw shape: {x_raw.shape}, range: [{x_raw.min()}, {x_raw.max()}]")
+    print(f"w_raw shape: {w_raw.shape}, range: [{w_raw.min()}, {w_raw.max()}]")
+    print(f"xw_raw shape: {xw_raw.shape}, range: [{xw_raw.min()}, {xw_raw.max()}]")
+    print(f"x_zp shape: {x_zp.shape}")
+    print(f"w_zp shape: {w_zp.shape}")
+    print()
+
+    print(f"w_q[0][0]: {w_q[0][0]}")
+    print(f"w_q[1][0]: {w_q[1][0]}")
+    print(f"w_zp[0]: {w_zp[0]}")
+    print(f"w_zp[1]: {w_zp[1]}")
+    print(f"w_raw[0][0]: {w_raw[0][0]}")
+    print(f"w_raw[1][0]: {w_raw[1][0]}")
+    print()
+
+    print(f"xw_raw[0][0][0]: {xw_raw[0][0][0]}")
+    print(f"xw_raw[0][0][1]: {xw_raw[0][0][1]}")
+    print(f"xw_raw[0][0][2]: {xw_raw[0][0][2]}")
+    print(f"xw_raw[0][0][3]: {xw_raw[0][0][3]}")
+    print()
+
+    print(f"xw_raw[0][1][0]: {xw_raw[0][1][0]}")
+    print(f"xw_raw[0][1][1]: {xw_raw[0][1][1]}")
+    print(f"xw_raw[0][1][2]: {xw_raw[0][1][2]}")
+    print(f"xw_raw[0][1][3]: {xw_raw[0][1][3]}")
+    print()
+
+    print(f"xw_raw[1][0][0]: {xw_raw[1][0][0]}")
+    print(f"xw_raw[1][0][1]: {xw_raw[1][0][1]}")
+    print(f"xw_raw[1][0][2]: {xw_raw[1][0][2]}")
+    print(f"xw_raw[1][0][3]: {xw_raw[1][0][3]}")
+    print()
+
+    print(f"xw_raw[1][1][0]: {xw_raw[1][1][0]}")
+    print(f"xw_raw[1][1][1]: {xw_raw[1][1][1]}")
+    print(f"xw_raw[1][1][2]: {xw_raw[1][1][2]}")
+    print(f"xw_raw[1][1][3]: {xw_raw[1][1][3]}")
+    print()
+
+if __name__ == "__main__":
+    main()

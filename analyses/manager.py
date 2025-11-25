@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class TensorAnalysisManager:
-    def __init__(self, sample=False, active_analyzer=None, analyzer_configs=None):
+    def __init__(self, sample=False, active_analyzer=None, analyzer_configs=None, output_dir=None):
         self.sample = sample
         self.analyzer_configs = analyzer_configs or {}
 
@@ -23,7 +23,7 @@ class TensorAnalysisManager:
             "distribution": DistributionAnalyzer(),
             "similarity": StatefulSimilarityAnalyzer(**self.analyzer_configs.get('similarity', {})),
             "shape": ShapeAnalyzer(),
-            # "bitslice_amount": BitSliceAmountAnalyzer(),
+            # "bitslice": BitsliceAnalyzer(),
         }
         
         # Set active analyzer
@@ -37,7 +37,7 @@ class TensorAnalysisManager:
                 self.analyzers = {}
         
         self.results = defaultdict(lambda: defaultdict(dict))
-        self.output_dir = None
+        self.output_dir = output_dir or None
     
     def add_analyzer(self, name: str, analyzer: TensorAnalyzer) -> None:
         if not self.sample:
@@ -54,13 +54,19 @@ class TensorAnalysisManager:
         results = {}
         for analyzer_name, analyzer in self.analyzers.items():
             try:
-                results[analyzer_name] = analyzer.analyze(tensor, module_info=module_info, **kwargs)
+                if analyzer_name == "bitslice":
+                    if analyzer.performance:
+                        results['performance'] = analyzer.analyze_performance(tensor, module_info=module_info)
+                    else:
+                        results[analyzer_name] = analyzer.analyze(tensor, module_info=module_info, **kwargs)
+                else:
+                    results[analyzer_name] = analyzer.analyze(tensor, module_info=module_info, **kwargs)
             except Exception as e:
                 logger.error(f"Error in {analyzer_name} analyzer: {e}")
                 results[analyzer_name] = {"error": str(e)}
-                return {}
         
         return results
+
     
     def store_results(
         self, 
@@ -77,9 +83,18 @@ class TensorAnalysisManager:
         if output_dir is None:
             raise ValueError("No output directory specified")
         
-        for analyzer_name, analyzer in self.analyzers.items():
-            analyzer_output_dir = os.path.join(output_dir, analyzer_name)
-            analyzer.save_results(self.results, analyzer_output_dir)
+        for analyzer_name, analyzer in self.analyzers.items():            
+            if analyzer_name == "bitslice":
+                if analyzer.performance:
+                    analyzer_output_dir = os.path.join(output_dir, "performance")
+                    analyzer.save_performance_result(self.results, analyzer_output_dir)
+                else:
+                    analyzer_output_dir = os.path.join(output_dir, analyzer_name)
+                    analyzer.save_results(self.results, analyzer_output_dir)
+                pass
+            else:
+                analyzer_output_dir = os.path.join(output_dir, analyzer_name)
+                analyzer.save_results(self.results, analyzer_output_dir)
     
     def clear_results(self) -> None:
         self.results.clear()

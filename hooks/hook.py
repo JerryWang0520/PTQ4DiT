@@ -3,10 +3,11 @@ from typing import Dict, Any
 
 
 class HookAnalysis:
-    def __init__(self, computation_strategy, analysis_manager, tensor_saver=None):
+    def __init__(self, computation_strategy, analysis_manager, tensor_saver=None, performance_evaluator=None):
         self.computation_strategy = computation_strategy
         self.analysis_manager = analysis_manager
         self.tensor_saver = tensor_saver
+        self.performance_evaluator = performance_evaluator
     
     def __call__(self, module, input, output, name: str) -> torch.Tensor:
         if hasattr(module, 'step'):
@@ -27,16 +28,21 @@ class HookAnalysis:
         
         if self.analysis_manager.analyzers:
             tensors_to_analyze = self.computation_strategy.get_tensors_to_analyze()
+            module_info["layer_size"] = tensors_to_analyze.pop("layer_size", None)
 
-            if "similarity" in self.analysis_manager.analyzers.keys() or \
-               "bitslice"   in self.analysis_manager.analyzers.keys():
-            #    "bitwidth"   in self.analysis_manager.analyzers.keys() or \
+            if "similarity" in self.analysis_manager.analyzers.keys():
+                results = self.analysis_manager.analyze_tensor(tensors_to_analyze["act"], module_info=module_info)
+                self.analysis_manager.store_results(name, module.step, "act", results)
+            elif "bitslice"   in self.analysis_manager.analyzers.keys():
                 results = self.analysis_manager.analyze_tensor(tensors_to_analyze["act"], module_info=module_info)
                 self.analysis_manager.store_results(name, module.step, "act", results)
             elif "bitwidth" in self.analysis_manager.analyzers.keys():
-                for tensor_name, tensor in tensors_to_analyze.items():
-                    results = self.analysis_manager.analyze_tensor(tensor, module_info=module_info)
-                    self.analysis_manager.store_results(name, module.step, tensor_name, results)
+                results = self.analysis_manager.analyze_tensor(tensors_to_analyze["act"], module_info=module_info)
+                self.analysis_manager.store_results(name, module.step, "act", results)
+
+                # for tensor_name, tensor in tensors_to_analyze.items():
+                #     results = self.analysis_manager.analyze_tensor(tensor, module_info=module_info)
+                #     self.analysis_manager.store_results(name, module.step, tensor_name, results)
             else:
                 for tensor_name, tensor in tensors_to_analyze.items():
                     results = self.analysis_manager.analyze_tensor(tensor, module_info=module_info)
@@ -46,6 +52,10 @@ class HookAnalysis:
             tensors_to_save = self.computation_strategy.get_tensors_to_save()
             self.tensor_saver.save_global_tiles(tensors_to_save, name, module.step)
             self.tensor_saver.save_local_tiles(name, module.step)
+        
+        if self.performance_evaluator:
+            tensors_to_perf = self.computation_strategy.get_tensors_to_perf()
+            self.performance_evaluator.evaluate(tensors_to_perf)
 
         # assert torch.allclose(out_computed, output, atol=1e-3, rtol=1e-3), \
         #     f"out_computed != output in {name}: max diff = {torch.max(torch.abs(out_computed - output))}"

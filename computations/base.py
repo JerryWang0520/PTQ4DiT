@@ -5,12 +5,13 @@ import torch.nn.functional as F
 
 
 class ComputationStrategy(ABC):
-    def __init__(self, clamp=False, bitslice_strategy=None, save=False):
+    def __init__(self, clamp=False, bitslice_strategy=None, save=False, path_reverse=False):
         self.tensors = {}
         self.save_tensors = {}
         self.clamp = clamp
         self.bitslice_strategy = bitslice_strategy
         self.save = save
+        self.path_reverse = path_reverse
 
         should_assert = (
             (not self.clamp and not self.bitslice_strategy) or \
@@ -24,7 +25,7 @@ class ComputationStrategy(ABC):
 
     def get_tensors_to_save(self) -> Dict[str, torch.Tensor]:
         return self.save_tensors
-        
+    
     def apply_bitslice_reconstruction(self, tensor):
         if self.bitslice_strategy:
             if self.bitslice_strategy.bitslice_clamp:
@@ -38,8 +39,14 @@ class ComputationStrategy(ABC):
             w_col = weight.clone()
             w_col = w_col.view(w_col.shape[0], -1)
             output = torch.matmul(w_col, input)
+            # print(f"input  shape: {input.shape}")
+            # print(f"weight shape: {w_col.shape}")
+            # print(f"output shape: {output.shape}")
         elif module.fwd_func == F.linear:
             output = module.fwd_func(input, weight, **module.fwd_kwargs)
+            # print(f"input  shape: {input.shape}")
+            # print(f"weight shape: {w_col.shape}")
+            # print(f"output shape: {output.shape}")
         else:
             raise Exception(f"Unsupported fwd_func in {name}")
         
@@ -47,6 +54,7 @@ class ComputationStrategy(ABC):
 
     def get_Raw_input(self, module, name, tensor):
         tensor = tensor.clone()
+        # print(f"original tensor shape: {tensor.shape}")
 
         if module.fwd_func == F.conv2d:
             fold_params = self._get_fold_params(module)
@@ -199,6 +207,9 @@ class ComputationStrategy(ABC):
         w_q = torch.round(w_dq / w_scale) + w_zp
         # print(f"x_q dtype: {x_q.dtype}")
         # print(f"w_q dtype: {w_q.dtype}")
+
+        if self.path_reverse:
+            x_q[[0, 1]] = x_q[[1, 0]]
         
         return {
             'x_scale': x_scale,
@@ -265,6 +276,9 @@ class ComputationStrategy(ABC):
         else:
             raise Exception("Unsupported fwd_func")
             
+        if self.path_reverse:
+            y_dq[[0, 1]] = y_dq[[1, 0]]
+        
         return module.activation_function(y_dq)
 
     @abstractmethod

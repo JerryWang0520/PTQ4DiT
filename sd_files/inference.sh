@@ -1,0 +1,1 @@
+../../q-diffusion/inference.sh

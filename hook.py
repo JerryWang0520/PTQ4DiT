@@ -1,7 +1,19 @@
 import torch
 import torch.nn.functional as F
+from collections import defaultdict
 
-def hook_original(module, input, output, name, dequant=False, quant=False, bias_folding=False):
+from analysis import count_minimum_bitwidth
+
+def hook_original(module, input, output, name, dequant=False, quant=True, bias_folding=False):
+    # add step indicator
+    if hasattr(module, 'step'):
+        module.step += 1
+    else:
+        module.step = 1
+    
+    if not hasattr(module, 'counts'):
+        module.counts = defaultdict(dict)
+    
     x_scale = module.act_quantizer.delta
     w_scale = module.weight_quantizer.delta
     x_zp = module.act_quantizer.zero_point
@@ -29,102 +41,23 @@ def hook_original(module, input, output, name, dequant=False, quant=False, bias_
             raise Exception("Unsupported fwd_func")
         out_dq = module.activation_function(y_dq)
 
-"""
-    # Bias folding (with errors)
-    if bias_folding:
-        N = module.weight.shape[1]                                               # in_features
-        sum_wq = torch.sum(w_q, dim=1 if module.fwd_func == F.linear else (1, 2, 3))  # per-output-channel sum
-        # print("w_q shape:", w_q.shape)
-        # print("sum_wq shape:", sum_wq.shape)
-        scale = (x_scale * w_scale).squeeze()                                    # [out_features]
-        # print("w_scale shape:", w_scale.shape)
-        # print("scale shape:", scale.shape)
-        w_zp = w_zp.squeeze()                                                    # [out_features]
-        # print("w_zp shape:", w_zp.shape)
-        bias_folded = module.bias - scale * (x_zp * sum_wq - x_zp * w_zp * N)    # [out_features]
-        # print("bias shape:", module.bias.shape)
-        # print("bias_folded shape:", bias_folded.shape)
-
-        xw_q = module.fwd_func(x_q, w_q, **module.fwd_kwargs)
-        print("xw_q shape:", xw_q.shape)
-        if module.fwd_func == F.conv2d:
-            # scale = (x_scale * w_scale).view(1, -1, 1, 1)   # [1, out_channels, 1, 1]
-            # print(scale.shape)
-            # bias_folded = bias_folded.view(1, -1, 1, 1)     # [1, out_channels, 1, 1]
-            # print(bias_folded.shape)
-
-            batch_size, in_channels, height, width = x_q.shape
-            out_channels, _, kernel_h, kernel_w = w_q.shape
-            
-            sum_xq = torch.sum(x_q, dim=1, keepdim=True)
-            ones_kernel = torch.ones(out_channels, 1, kernel_h, kernel_w, device=x_q.device)
-            
-            # Convolve sum_xq with the ones kernel to get the summed values that affect each output
-            zp_summed = F.conv2d(
-                sum_xq,  # [2, 1, 32, 32]
-                ones_kernel,  # [1152, 1, 2, 2]
-                stride=module.fwd_kwargs.get('stride', 1),
-                padding=module.fwd_kwargs.get('padding', 0),
-                dilation=module.fwd_kwargs.get('dilation', 1),
-                groups=1
-            )
-            
-            # Step 5: Apply weight zero point
-            w_zp_reshaped = w_zp.reshape(1, -1, 1, 1)  # [1, 1152, 1, 1]
-            zp_compensation = zp_summed * w_zp_reshaped  # [2, 1152, H_out, W_out]
-
-            # Step 6: Apply scale and bias
-            scale_reshaped = scale.reshape(1, -1, 1, 1)  # [1, 1152, 1, 1]
-            bias_folded_reshaped = bias_folded.reshape(1, -1, 1, 1)  # [1, 1152, 1, 1]
-
-            # Final computation
-            y_dq = scale_reshaped * (xw_q - zp_compensation) + bias_folded_reshaped
-        elif module.fwd_func == F.linear:   # dim = 3
-            if x_q.dim() in [2, 3]:
-                x_q_orgin = x_q
-                if x_q_orgin.dim() == 2:
-                    x_q = x_q.unsqueeze(1)      # Add seq_len=1 dimension
-                    xw_q = xw_q.unsqueeze(1)    # Add seq_len=1 dimension
-                    # print("x_q shape:", x_q.shape)
-                    # print("xw_q shape:", xw_q.shape)
-                
-                batch_size = x_q.shape[0]
-                seq_len = x_q.shape[1]
-                
-                scale = (x_scale * w_scale).reshape(1, 1, -1)                       # [1, 1, out_features]
-                bias_folded = bias_folded.reshape(1, 1, -1)                         # [1, 1, out_features]
-                # print("scale shape:", scale.shape)
-                # print("bias_folded shape:", bias_folded.shape)
-                
-                sum_xq = torch.sum(x_q, dim=-1).reshape(batch_size, seq_len, 1)     # [batch, seq_len, 1]
-                # print("sum_xq shape:", sum_xq.shape)
-                w_zp = w_zp.reshape(1, 1, -1)                                       # [1, 1, out_features]
-                # print("w_zp shape:", w_zp.shape)
-                zp_compensation = sum_xq * w_zp                                     # [batch, seq_len, out_features]
-                # print("zp_compensation shape:", zp_compensation.shape)
-                
-                y_dq = scale * (xw_q - zp_compensation) + bias_folded               # [batch, seq_len, out_features]
-                # print("y_dq shape:", y_dq.shape)
-
-
-                if x_q_orgin.dim() == 2:
-                    y_dq = y_dq.squeeze(1)  # shape: [batch_size, out_features]
-                    # print("y_dq shape:", y_dq.shape)
-            else:
-                raise Exception(f"Unsupported input dimension {x_q.dim()}")
-        else:
-            raise Exception("Unsupported fwd_func")
-
-        out_dq = module.activation_function(y_dq)
-"""
-
     # assert torch.equal(out_dq, output), f"out_dq != output in {name}: max diff = {torch.max(torch.abs(out_dq - output))}"
-    assert torch.allclose(out_dq, output, atol=1e-1, rtol=1e-1), f"out_dq != output in {name}: max diff = {torch.max(torch.abs(out_dq - output))}"
+    # assert torch.allclose(out_dq, output, atol=1e-1, rtol=1e-1), f"out_dq != output in {name}: max diff = {torch.max(torch.abs(out_dq - output))}"
+    assert torch.allclose(out_dq, output, atol=1e-3, rtol=1e-3), f"out_dq != output in {name}: max diff = {torch.max(torch.abs(out_dq - output))}"
 
     return output   # pass golden
     # return out_dq   # pass raw
 
 def hook_SD(module, input, output, name, ref_first=False):
+    # add step indicator
+    if hasattr(module, 'step'):
+        module.step += 1
+    else:
+        module.step = 1
+    
+    if not hasattr(module, 'counts'):
+        module.counts = defaultdict(dict)
+
     x_scale = module.act_quantizer.delta
     w_scale = module.weight_quantizer.delta
     x_zp = module.act_quantizer.zero_point
@@ -139,34 +72,52 @@ def hook_SD(module, input, output, name, ref_first=False):
     xw_q = module.fwd_func(x_q - x_zp, w_q - w_zp, **module.fwd_kwargs)
 
     if module.fwd_func == F.conv2d:
+        fold_params = get_fold_params(module)
+        x_delta = F.unfold(x_q - x_zp, **fold_params)
+        if ref_first:
+            x_delta[:, :, 1:] -= x_delta[:, :, 0:1]
+        else:
+            x_prev = torch.roll(x_delta, 1, dims=-1)
+            x_prev[:, :, 0:1] = 0
+            x_delta -= x_prev
+        
+        w_col = w_q - w_zp
+        w_col = w_col.view(xw_q.shape[1], -1)
+        xw_raw = torch.matmul(w_col, x_delta)   # differential computing
+
+        if ref_first:
+            xw_raw[:, :, 1:]  += xw_raw[:, :, 0:1]
+        else:
+            xw_raw = torch.cumsum(xw_raw, dim=-1)
+        
+        xw_raw = xw_raw.view(xw_q.shape[0], xw_q.shape[1], xw_q.shape[2], xw_q.shape[3])
+
+        # module.counts["act"   ][module.step] = count_minimum_bitwidth(col       , signed=True, max_bits=10)
+        # module.counts["weight"][module.step] = count_minimum_bitwidth(weight_col, signed=True, max_bits=10)
+
+        assert torch.equal(xw_raw, xw_q), f"xw_raw != xw_q in {name}: max diff = {torch.max(torch.abs(xw_raw - xw_q))}"
         y_dq = xw_q * x_scale * w_scale.permute(1, 0, 2, 3) + module.bias.unsqueeze(0).unsqueeze(2).unsqueeze(3)
     elif module.fwd_func == F.linear:
         x_delta = x_q
         if x_delta.dim() in [2, 3]:
-            # slice(start, limit, step)
-            slice_all   = slice(None)                       # slice(None, None, None),
-            slice_first = slice(0, 1)                       # slice(0, 1, None)
-            slice_rest  = slice(1, None)                    # slice(1, None, None)
-
-            prefix = (slice_all,) * (x_delta.dim() - 2)     # ()                                              / (slice(None, None, None),)
-            first_row = prefix + (slice_first, slice_all)   # (slice(0, 1, None), slice(None, None, None))    / (slice(None, None, None), slice(0, 1, None), slice(None, None, None))
-            other_row = prefix + (slice_rest, slice_all)    # (slice(1, None, None), slice(None, None, None)) / (slice(None, None, None), slice(1, None, None), slice(None, None, None))
-
-            if ref_first:   # all other rows are substracted by the first row
-                x_delta[other_row] -= x_delta[first_row]
-                x_delta[first_row] -= x_zp
+            if ref_first:
+                x_delta[..., 1:, :] -= x_delta[..., 0:1, :]
+                x_delta[..., 0:1, :] -= x_zp
 
                 xw_raw = module.fwd_func(x_delta, w_q - w_zp, **module.fwd_kwargs)
-                xw_raw[other_row] += xw_raw[first_row]
-            else:           # every row is substracted by the previous row expect the first row
+                xw_raw[..., 1:, :] += xw_raw[..., 0:1, :]
+            else:
                 x_prev = torch.roll(x_delta, 1, dims=-2)
-                x_prev[first_row] = x_zp
+                x_prev[..., 0:1, :] = x_zp
                 x_delta -= x_prev
 
                 xw_raw = module.fwd_func(x_delta, w_q - w_zp, **module.fwd_kwargs)
                 xw_raw = torch.cumsum(xw_raw, dim=-2)
         else:
             raise Exception(f"Unsupported input dimension {x_delta.dim()}")
+
+        # module.counts["act"   ][module.step] = count_minimum_bitwidth(x_delta   , signed=True, max_bits=10)
+        # module.counts["weight"][module.step] = count_minimum_bitwidth(w_q - w_zp, signed=True, max_bits=10)
 
         assert torch.equal(xw_raw, xw_q), f"xw_raw != xw_q in {name}: max diff = {torch.max(torch.abs(xw_raw - xw_q))}"
         y_dq = xw_q * x_scale * w_scale.permute(1, 0) + module.bias
@@ -199,23 +150,18 @@ def hook_TD(module, input, output, name):
     x_q = torch.round(x_dq / x_scale) + x_zp
     w_q = torch.round(w_dq / w_scale) + w_zp
 
+    xw_q = module.fwd_func(x_q - x_zp, w_q - w_zp, **module.fwd_kwargs)
     if hasattr(module, 'x_prev'):  # 2nd~ step
         x_delta = x_q - module.x_prev
-
-        xw_q     = module.fwd_func(x_q - x_zp, w_q - w_zp, **module.fwd_kwargs)
-        xw_delta = module.fwd_func(x_delta   , w_q - w_zp, **module.fwd_kwargs)
+        xw_delta = module.fwd_func(x_delta, w_q - w_zp, **module.fwd_kwargs)
         xw_raw   = xw_delta + module.output_prev
-
-        assert torch.equal(xw_raw, xw_q), f"xw_raw != xw_q in {name}: max diff = {torch.max(torch.abs(xw_raw - xw_q))}"
-        
-        module.x_prev  = x_q
-        module.output_prev = xw_raw
     else:  # 1st step
-        xw_q = module.fwd_func(x_q - x_zp, w_q - w_zp, **module.fwd_kwargs)
+        xw_raw = xw_q
+    
+    module.x_prev  = x_q
+    module.output_prev = xw_raw
 
-        module.x_prev  = x_q
-        module.output_prev = xw_q
-
+    assert torch.equal(xw_raw, xw_q), f"xw_raw != xw_q in {name}: max diff = {torch.max(torch.abs(xw_raw - xw_q))}"
     if module.fwd_func == F.conv2d:
         y_dq = xw_q * x_scale * w_scale.permute(1, 0, 2, 3) + module.bias.unsqueeze(0).unsqueeze(2).unsqueeze(3)
     elif module.fwd_func == F.linear:
@@ -250,20 +196,20 @@ def hook_CUD(module, input, output, name):
     x_q = torch.round(x_dq / x_scale) + x_zp
     w_q = torch.round(w_dq / w_scale) + w_zp
 
-    x_cond   = x_q[0]
-    x_uncond = x_q[1]
+    xw_q = module.fwd_func(x_q - x_zp, w_q - w_zp, **module.fwd_kwargs)
+
+    x_cond   = x_q[0] - x_zp
+    x_uncond = x_q[1] - x_zp
     x_delta  = x_cond - x_uncond
 
-    xw_cond   = module.fwd_func(x_cond   - x_zp, w_q - w_zp, **module.fwd_kwargs)
-    xw_uncond = module.fwd_func(x_uncond - x_zp, w_q - w_zp, **module.fwd_kwargs)
-    xw_delta  = module.fwd_func(x_delta        , w_q - w_zp, **module.fwd_kwargs)
-    xw_raw    = xw_delta + xw_uncond
+    xw_cond   = module.fwd_func(x_cond  , w_q - w_zp, **module.fwd_kwargs)
+    xw_uncond = module.fwd_func(x_uncond, w_q - w_zp, **module.fwd_kwargs)
+    xw_delta  = module.fwd_func(x_delta , w_q - w_zp, **module.fwd_kwargs)
 
-    assert torch.equal(xw_raw, xw_cond), f"xw_raw != xw_cond in {name}: max diff = {torch.max(torch.abs(xw_raw - xw_cond))}"
-    
-    xw_q = torch.stack([xw_cond, xw_uncond], dim=0)  # pass golden
-    # xw_q = torch.stack([xw_raw,  xw_uncond], dim=0)  # pass raw
+    xw_raw = xw_delta + xw_uncond    
+    xw_raw = torch.stack([xw_raw, xw_uncond], dim=0)  # pass raw
 
+    assert torch.equal(xw_raw, xw_q), f"xw_raw != xw_q in {name}: max diff = {torch.max(torch.abs(xw_raw - xw_q))}"
     if module.fwd_func == F.conv2d:
         y_dq = xw_q * x_scale * w_scale.permute(1, 0, 2, 3) + module.bias.unsqueeze(0).unsqueeze(2).unsqueeze(3)
     elif module.fwd_func == F.linear:
@@ -361,3 +307,34 @@ def hook_quant_info(module, input, output, name, output_dir="output"):
     collect_and_save_quant_stats(input_int, module.act_quantizer, "act")
     if module.step == 1:
         collect_and_save_quant_stats(weight_int, module.weight_quantizer, "weight")
+
+def get_fold_params(module):
+    if module.fwd_func != F.conv2d:
+        raise ValueError("fold_params only applicable for conv2d layers")
+    
+    kernel_h, kernel_w = module.weight.shape[2], module.weight.shape[3]
+    
+    stride   = module.fwd_kwargs.get('stride'  , 1)
+    padding  = module.fwd_kwargs.get('padding' , 0)
+    dilation = module.fwd_kwargs.get('dilation', 1)
+    
+    # Handle tuple arguments
+    if isinstance(stride, int):
+        stride_h = stride_w = stride
+    else:
+        stride_h, stride_w = stride
+        
+    if isinstance(padding, int):
+        pad_h = pad_w = padding
+    else:
+        pad_h, pad_w = padding
+        
+    if isinstance(dilation, int):
+        dil_h = dil_w = dilation
+    else:
+        dil_h, dil_w = dilation
+    
+    return dict(kernel_size=(kernel_h, kernel_w), 
+                stride=(stride_h, stride_w), 
+                padding=(pad_h, pad_w), 
+                dilation=(dil_h, dil_w))
