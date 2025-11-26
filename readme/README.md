@@ -103,10 +103,6 @@ python saver/tensor_saver.py
 tar zcvf <FileName.tar.gz> <DirName>
 ```
 
-## Citation
-
-If you use this work, please cite the original PTQ4DiT and q-diffusion papers along with acknowledging the differential and bit-slice computing extensions.
-
 ## License
 
-[Specify your license here]
+For internal research and development use.
