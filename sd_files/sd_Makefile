@@ -1,0 +1,126 @@
+CIFAR:
+	python scripts/sample_diffusion_ddim.py \
+		--config configs/cifar10.yml \
+		--use_pretrained \
+		--timesteps 100 \
+		--eta 0 \
+		--skip_type quad \
+		--ptq \
+		--weight_bit 8 \
+		--quant_mode qdiff \
+		--quant_act \
+		--act_bit 8 \
+		--a_sym \
+		--split \
+		--resume \
+		-l output \
+		--cali_ckpt calib_ckpt/cifar_w8a8_ckpt.pth \
+
+church:
+	python scripts/sample_diffusion_ldm.py \
+		-r models/ldm/lsun_churches256/model.ckpt \
+		-n 1 \
+		--batch_size 1 \
+		-c 200 \
+		-e 0.0 \
+		--seed 1 \
+		--ptq \
+		--weight_bit 8 \
+		--quant_act \
+		--act_bit 8 \
+		--resume \
+		-l output \
+		--cali_ckpt calib_ckpt/church_w8a8_ckpt.pth \
+		--verbose
+
+	# -n: total samples
+
+A.txt:
+	a puppy wearing a hat
+	a puppy wearing a hat
+	a puppy wearing a hat
+	a puppy wearing a hat
+	a puppy wearing a hat
+
+SD:
+	python scripts/txt2img.py \
+		--from-file $(prompt_file)\
+		--plms \
+		--cond \
+		--ptq \
+		--weight_bit 8 \
+		--quant_mode qdiff \
+		--no_grad_ckpt \
+		--split \
+		--n_samples 1 \
+		--n_iter $(n_iter) \
+		--resume \
+		--quant_act \
+		--act_bit 8 \
+		--sm_abit 16 \
+		$(if $(outdir),--outdir=$(outdir)) \
+		--cali_ckpt calib_ckpt/sd_w8a8_ckpt.pth \
+		--skip_grid \
+		--precision full \
+		$(if $(filter True,$(hook)),--hook) \
+		$(if $(strategy),--strategy=$(strategy)) \
+		$(if $(filter True,$(ref_first)),--ref_first) \
+		$(if $(bit_th),--bit_th=$(bit_th)) \
+		$(if $(analysis),--analysis=$(analysis)) \
+		$(if $(filter similarity,$(analysis)),--similarity-types=$(similarity_type)) \
+		$(if $(bitslice_method),--bitslice-method=$(bitslice_method)) \
+		$(if $(bitslice_bits),--bitslice-bits=$(bitslice_bits)) \
+		$(if $(bitslice_width),--bitslice-width=$(bitslice_width)) \
+		$(if $(filter True,$(bitslice_overflow)),--bitslice-keep-overflow) \
+		$(if $(scheme),--scheme=$(scheme)) \
+		$(if $(filter True,$(path_reverse)),--path-reverse) \
+		$(if $(filter True,$(save_tile)),--save-tile) \
+		$(if $(filter True,$(performance)),--performance) \
+		
+# 		--prompt "a puppy wearing a hat" \
+# 		--outdir output/$(analysis) \
+# 		--verbose \
+# 		--skip_save \
+
+# 		--n_samples: batch size
+# 		--n_iter: sample rounds
+# 		n_iter * n_samples = total samples
+
+summarize_bitwidth:
+	mkdir -p $(outdir)
+	python summaries/bitwidth_summary.py \
+		--input-dir $(indir) \
+		--output-dir $(outdir) \
+		--distribution-pattern "prompt*/round0/bitwidth/int9_full_distribution_act.csv" \
+		--bitwidth-pattern "prompt*/round0/bitwidth/bitwidth_act.csv" \
+		--save \
+		--stats \
+		| tee $(outdir)/bitwidth_summary.log
+
+
+summarize_bitslice:
+	mkdir -p $(outdir)
+	python summaries/bitslice_summary.py \
+		--input-dir $(indir) \
+		--output-dir $(outdir) \
+		--pattern "prompt*/round0/bitslice/bitslice_analysis.csv" \
+		$(if $(filter True,$(bitslice_overflow)),--bitslice-keep-overflow) \
+		--save \
+		--stats \
+		| tee $(outdir)/bitslice_summary.log
+
+# 		--input-dir output/bitslice/Final \
+# 		--output-dir output/summary \
+
+summarize_performance:
+	mkdir -p $(outdir)
+	python summaries/performance_summary.py \
+		--input-dir $(indir) \
+		--pattern "prompt*/round0/performance/performance_analysis.csv" \
+		--output-dir $(outdir) \
+		--save \
+		--stats \
+		| tee $(outdir)/performance_summary.log
+
+summarize_memory:
+	python summaries/memory_summary.py | tee output/summary/memory_summary.log
