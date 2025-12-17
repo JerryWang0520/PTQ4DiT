@@ -470,41 +470,41 @@
 
 
 
-# make run_samples outdir=output/samles/config1/original n_c=1 c_begin=0 c_end=1 hook=True strategy=original    clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
-# make run_samples outdir=output/samles/config1/Raw_SD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_SD      clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
-# make run_samples outdir=output/samles/config1/Raw_TD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_TD      clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
-# make run_samples outdir=output/samles/config1/Raw_CUD  n_c=1 c_begin=0 c_end=1 hook=True strategy=cfg         clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
-# make run_samples outdir=output/samles/config1/SD_SD    n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial     clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
-# make run_samples outdir=output/samles/config1/SD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=SD_TD       clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
-# make run_samples outdir=output/samles/config1/SD_CUD   n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial_cfg clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
-# make run_samples outdir=output/samles/config1/TD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=temporal    clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config1/original n_c=1 c_begin=0 c_end=1 hook=True strategy=original    clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config1/Raw_SD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_SD      clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config1/Raw_TD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_TD      clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config1/Raw_CUD  n_c=1 c_begin=0 c_end=1 hook=True strategy=cfg         clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config1/SD_SD    n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial     clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config1/SD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=SD_TD       clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config1/SD_CUD   n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial_cfg clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config1/TD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=temporal    clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
 
-# make run_samples outdir=output/samles/config2/original n_c=1 c_begin=0 c_end=1 hook=True strategy=original    clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
-# make run_samples outdir=output/samles/config2/Raw_SD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_SD      clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
-# make run_samples outdir=output/samles/config2/Raw_TD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_TD      clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
-# make run_samples outdir=output/samles/config2/Raw_CUD  n_c=1 c_begin=0 c_end=1 hook=True strategy=cfg         clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
-# make run_samples outdir=output/samles/config2/SD_SD    n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial     clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
-# make run_samples outdir=output/samles/config2/SD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=SD_TD       clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
-# make run_samples outdir=output/samles/config2/SD_CUD   n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial_cfg clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
-# make run_samples outdir=output/samles/config2/TD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=temporal    clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config2/original n_c=1 c_begin=0 c_end=1 hook=True strategy=original    clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config2/Raw_SD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_SD      clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config2/Raw_TD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_TD      clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config2/Raw_CUD  n_c=1 c_begin=0 c_end=1 hook=True strategy=cfg         clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config2/SD_SD    n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial     clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config2/SD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=SD_TD       clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config2/SD_CUD   n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial_cfg clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
+# make run_samples outdir=output/samples/config2/TD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=temporal    clamp=True bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True
 
-# make run_samples outdir=output/samles/config3/original n_c=1 c_begin=0 c_end=1 hook=True strategy=original    clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
-# make run_samples outdir=output/samles/config3/Raw_SD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_SD      clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
-# make run_samples outdir=output/samles/config3/Raw_TD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_TD      clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
-# make run_samples outdir=output/samles/config3/Raw_CUD  n_c=1 c_begin=0 c_end=1 hook=True strategy=cfg         clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
-# make run_samples outdir=output/samles/config3/SD_SD    n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial     clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
-# make run_samples outdir=output/samles/config3/SD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=SD_TD       clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
-# make run_samples outdir=output/samles/config3/SD_CUD   n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial_cfg clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
-# make run_samples outdir=output/samles/config3/TD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=temporal    clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
+# make run_samples outdir=output/samples/config3/original n_c=1 c_begin=0 c_end=1 hook=True strategy=original    clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
+# make run_samples outdir=output/samples/config3/Raw_SD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_SD      clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
+# make run_samples outdir=output/samples/config3/Raw_TD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_TD      clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
+# make run_samples outdir=output/samples/config3/Raw_CUD  n_c=1 c_begin=0 c_end=1 hook=True strategy=cfg         clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
+# make run_samples outdir=output/samples/config3/SD_SD    n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial     clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
+# make run_samples outdir=output/samples/config3/SD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=SD_TD       clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
+# make run_samples outdir=output/samples/config3/SD_CUD   n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial_cfg clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
+# make run_samples outdir=output/samples/config3/TD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=temporal    clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=False
 
-# make run_samples outdir=output/samles/config4/original n_c=1 c_begin=0 c_end=1 hook=True strategy=original    clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
-# make run_samples outdir=output/samles/config4/Raw_SD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_SD      clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
-# make run_samples outdir=output/samles/config4/Raw_TD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_TD      clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
-# make run_samples outdir=output/samles/config4/Raw_CUD  n_c=1 c_begin=0 c_end=1 hook=True strategy=cfg         clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
-# make run_samples outdir=output/samles/config4/SD_SD    n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial     clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
-# make run_samples outdir=output/samles/config4/SD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=SD_TD       clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
-# make run_samples outdir=output/samles/config4/SD_CUD   n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial_cfg clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
-# make run_samples outdir=output/samles/config4/TD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=temporal    clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
+# make run_samples outdir=output/samples/config4/original n_c=1 c_begin=0 c_end=1 hook=True strategy=original    clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
+# make run_samples outdir=output/samples/config4/Raw_SD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_SD      clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
+# make run_samples outdir=output/samples/config4/Raw_TD   n_c=1 c_begin=0 c_end=1 hook=True strategy=Raw_TD      clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
+# make run_samples outdir=output/samples/config4/Raw_CUD  n_c=1 c_begin=0 c_end=1 hook=True strategy=cfg         clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
+# make run_samples outdir=output/samples/config4/SD_SD    n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial     clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
+# make run_samples outdir=output/samples/config4/SD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=SD_TD       clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
+# make run_samples outdir=output/samples/config4/SD_CUD   n_c=1 c_begin=0 c_end=1 hook=True strategy=spatial_cfg clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
+# make run_samples outdir=output/samples/config4/TD_TD    n_c=1 c_begin=0 c_end=1 hook=True strategy=temporal    clamp=False bitslice_method=bada bitslice_bits=9 bitslice_width=3 bitslice_overflow=True bitslice_clamp=True
 
 
 

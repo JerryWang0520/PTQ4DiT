@@ -77,6 +77,7 @@ Compute FID scores for image quality assessment:
 ```bash
 make run_samples
 python evaluations/compress.py --sample-dir=<SAMPLE DIRECTORY> --num-fid-samples=<NUM SAMPLES>
+source set_env.sh
 python evaluations/evaluator.py <COMPRESSED REFERENCE FILE> <COMPRESSED SAMPLE FILE>
 
 # Example:
@@ -86,6 +87,22 @@ python evaluations/evaluator.py <COMPRESSED REFERENCE FILE> <COMPRESSED SAMPLE F
 ```
 
 Download reference batches from the [guided-diffusion evaluations](https://github.com/openai/guided-diffusion/tree/main/evaluations).
+
+### TensorFlow CuDNN Version Mismatch Error
+
+When running the FID evaluation script, you may encounter a CuDNN version mismatch error. The error occurs because TensorFlow finds the system's CuDNN library (version 9.1.0) instead of the version it was compiled with (version 9.3.0), resulting in "No DNN in stream executor" errors.
+
+The root cause is that the dynamic linker searches for shared libraries in system paths before checking the conda environment. Although image generation with PyTorch works correctly, TensorFlow's FID evaluation fails because it cannot properly load the matching CuDNN version.
+
+To resolve this issue, you need to set the `LD_LIBRARY_PATH` environment variable to prioritize the conda environment's library directory. This ensures TensorFlow loads the correct CuDNN version from your conda environment rather than the system installation.
+
+**Solution**: Before running the FID evaluation, source the environment setup script:
+
+```bash
+source set_env.sh
+```
+
+This script sets `LD_LIBRARY_PATH` to include your conda environment's lib directory at the highest priority, allowing TensorFlow to find and use the compatible CuDNN library. You need to source this script each time you start a new terminal session before running evaluations.
 
 ### Hardware Pattern Generation
 Hook and save computation patterns:
